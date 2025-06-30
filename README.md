@@ -1,6 +1,4 @@
-Here’s your **revised and detailed professional README**, tailored specifically for a Kotlin + Jetpack Compose mobile app and a React + Vite admin dashboard using a shared Supabase backend.
 
----
 
 ```markdown
 # 💧 Water Quality Issues Reporting System
