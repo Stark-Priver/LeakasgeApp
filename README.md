@@ -30,16 +30,16 @@ This documentation serves as a complete guide for setting up, running, and under
     - **Issue Type**
     - **Severity Level** (Low, Medium, High, Critical)
     - **Textual Description**
-    - **Photo Upload** via Camera or Gallery
-    - **Real-time GPS Location** embedded in EXIF metadata
+    - **Photo Upload** via Camera or Gallery (Camera integration uses Android's `ActivityResultContracts.TakePicture` which simplifies CameraX usage.)
+    - **Real-time GPS Location** (Coordinates are fetched using Fused Location Provider and saved to the database. Embedding GPS in image EXIF metadata is a potential future enhancement.)
 
 - **Image Capture**
-  - Integrates `CameraX` API for live camera capture
-  - Images are saved and uploaded to Supabase Storage
+  - Utilizes Android's Activity Result APIs for camera capture, which may use CameraX internally.
+  - Images are saved and uploaded to Supabase Storage.
 
 - **Geo-Tagging**
-  - Uses Fused Location Provider to get device location
-  - Coordinates are saved to Supabase DB and image metadata
+  - Uses Fused Location Provider to get device location.
+  - Coordinates are saved to the Supabase Database alongside the report. (Note: Embedding coordinates directly into image EXIF metadata is not currently implemented).
 
 - **Report Viewer**
   - Users can view the status of all their submitted reports
@@ -96,8 +96,8 @@ implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha")
 * **Secure Admin Login** via Supabase
 * **Dashboard View**:
 
-  * Table of all reported issues with filters by date, severity, or status
-  * Clickable rows to open a full report detail
+  * Table of all reported issues with filters by severity or status. (Filtering by date is a potential future enhancement.)
+  * Clickable rows to open a full report detail.
 * **Status Management**:
 
   * Admin can update report status (e.g. Pending → Resolved)
@@ -176,9 +176,10 @@ CREATE TABLE water_issues (
 * **Storage**
 
   * Bucket: `water_issues_images`
-  * Image access: authenticated user upload, public or signed URL read
+  * Image access: Authenticated users upload images to a path corresponding to their user ID (e.g., `auth.uid()/image_name.ext`). This is enforced by Storage RLS policies. For images to be viewable in the app and admin panel, the `water_issues_images` bucket (or relevant paths like `/public/*` if images are stored there, though current setup is `user_id/*`) should be configured for public read access, or your application logic would need to generate signed URLs if the bucket is private. The current implementation uses public URLs.
+    * **Note on Bucket Access:** For the current setup (using `publicUrl()`): In your Supabase dashboard, navigate to **Storage** > **Policies**. Select the `water_issues_images` bucket. Ensure there's a policy allowing public read access (SELECT) for all files or specifically for files under user folders if you want more granularity (e.g., `(bucket_id = 'water_issues_images') AND ((storage.foldername(name))[1] = auth.uid()::text)` for owner-only read, or a simpler public read policy). A common approach for public images is to have no SELECT RLS, or a policy that allows SELECT for `anon` or `authenticated` roles. The upload (INSERT) policy is already restrictive.
 
-* **Row-Level Security (RLS)**
+* **Row-Level Security (RLS)** for Database:
 
 ```sql
 -- Only allow users to access their own reports
