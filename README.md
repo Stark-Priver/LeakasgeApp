@@ -1,152 +1,284 @@
+Here’s your **revised and detailed professional README**, tailored specifically for a Kotlin + Jetpack Compose mobile app and a React + Vite admin dashboard using a shared Supabase backend.
+
+---
+
+```markdown
 # 💧 Water Quality Issues Reporting System
 
-A Kotlin-based mobile app and React-based web admin dashboard for reporting and managing water-related issues such as leakages and water quality concerns. Built using **Supabase** for shared backend services including authentication, database, and file storage.
+A full-stack mobile and web solution for reporting and managing community-based water-related issues like leakages and water contamination. This project consists of:
+
+- A **Kotlin Android app** built with **Jetpack Compose UI**
+- A **React + Vite admin dashboard**
+- A **shared Supabase backend** for authentication, database, and image storage
+
+This documentation serves as a complete guide for setting up, running, and understanding the core architecture, making it easy for contributors (e.g., Jules) to get started quickly.
 
 ---
 
-## 📱 Mobile App – Kotlin (Android)
+## 📱 Mobile App – Kotlin + Jetpack Compose
 
 ### ✅ Features
 
-- **User Registration and Login**  
-  Powered by Supabase Auth with secure JWT-based session handling.
+- **User Authentication**
+  - Supabase Auth with email/password login
+  - Secure JWT session handling
 
-- **Issue Reporting**  
-  - Report types: Leakage, Water Quality Problem, etc.
-  - Fields: Description, Severity Level (Low, Medium, High, Critical)
-  - Image upload from Camera or Gallery
-  - GPS-based location embedded into image EXIF
-  - Reports are submitted with image and location metadata
+- **Issue Reporting Workflow**
+  - Users can report:
+    - Water leakages
+    - Contamination or discoloration
+    - Other related issues
+  - Input fields include:
+    - **Issue Type**
+    - **Severity Level** (Low, Medium, High, Critical)
+    - **Textual Description**
+    - **Photo Upload** via Camera or Gallery
+    - **Real-time GPS Location** embedded in EXIF metadata
 
-- **Report Management**  
-  - Users can view their submitted reports and their statuses
-  - Real-time status updates from the admin
+- **Image Capture**
+  - Integrates `CameraX` API for live camera capture
+  - Images are saved and uploaded to Supabase Storage
+
+- **Geo-Tagging**
+  - Uses Fused Location Provider to get device location
+  - Coordinates are saved to Supabase DB and image metadata
+
+- **Report Viewer**
+  - Users can view the status of all their submitted reports
+  - Reports show location, timestamp, and image preview
 
 ---
 
-## 🌐 Web Admin Dashboard – React (for Authorities)
+### 📂 Mobile Project Structure
+
+```
+
+mobile-app/
+├── app/
+│   └── src/main/java/com/example/waterreporter/
+│       ├── auth/          # Login, Register
+│       ├── report/        # Create & view reports
+│       ├── components/    # Reusable Jetpack Compose components
+│       ├── utils/         # Supabase client, Location utils, etc.
+│       └── MainActivity.kt
+├── build.gradle.kts
+└── local.properties
+
+````
+
+---
+
+### 🧪 Dependencies
+
+```kotlin
+// Core
+implementation("androidx.compose.ui:ui")
+implementation("androidx.navigation:navigation-compose")
+implementation("io.github.jan-tennert.supabase:supabase-kt-android:1.3.3")
+
+// Location
+implementation("com.google.android.gms:play-services-location")
+
+// Image & Camera
+implementation("androidx.camera:camera-camera2:1.1.0")
+implementation("androidx.camera:camera-lifecycle:1.1.0")
+implementation("androidx.camera:camera-view:1.0.0-alpha32")
+implementation("io.coil-kt:coil-compose:2.2.2")
+
+// Permissions
+implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha")
+````
+
+---
+
+## 🌐 Web Admin Dashboard – React + Vite
 
 ### ✅ Features
 
-- **Admin Authentication**  
-  Login via Supabase (with role-based access control)
+* **Secure Admin Login** via Supabase
+* **Dashboard View**:
 
-- **Reports Dashboard**  
-  - List all reports with filter options (by status, date, severity)
-  - View full details of each report: image, map location, description
-  - Update report status (e.g., Pending, In Progress, Resolved)
+  * Table of all reported issues with filters by date, severity, or status
+  * Clickable rows to open a full report detail
+* **Status Management**:
 
-- **Map Integration**  
-  - Optional integration with Google Maps or Leaflet to visualize report location
+  * Admin can update report status (e.g. Pending → Resolved)
+* **Image + Location**:
+
+  * View uploaded photo
+  * Display map with coordinates using Leaflet or Google Maps
 
 ---
 
-## 📦 Shared Backend – Supabase
+### 📂 Web Project Structure
 
-- **Authentication**  
-  Supabase Auth used for both users and admins
+```
+admin-dashboard/
+├── public/
+├── src/
+│   ├── components/      # UI components
+│   ├── pages/           # Login, Dashboard, Report Detail
+│   ├── services/        # Supabase service
+│   └── App.tsx
+├── .env
+├── vite.config.ts
+└── package.json
+```
 
-- **Database** – PostgreSQL schema shared across apps:
-  - `users` – Authenticated users
-  - `water_issues` – Submitted issue reports
+---
+
+### 🧪 Dependencies
+
+```json
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.11.0",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^4.2.1",
+    "tailwindcss": "^3.4.1"
+  }
+}
+```
+
+---
+
+## 📦 Shared Supabase Backend
+
+* **Authentication**
+
+  * Supabase Auth used in both mobile and web
+* **Database (PostgreSQL)**
 
 ```sql
--- Table: users
-id UUID PRIMARY KEY
-email TEXT
-created_at TIMESTAMP
+-- users
+CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  email TEXT,
+  created_at TIMESTAMP DEFAULT now()
+);
 
--- Table: water_issues
-id UUID PRIMARY KEY
-user_id UUID REFERENCES users(id)
-type TEXT
-description TEXT
-severity TEXT
-image_url TEXT
-latitude FLOAT
-longitude FLOAT
-status TEXT DEFAULT 'Pending'
-timestamp TIMESTAMP DEFAULT now()
-Storage
-Supabase Storage used for storing uploaded images securely
-Images include GPS location embedded as EXIF data
+-- water_issues
+CREATE TABLE water_issues (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  type TEXT,
+  description TEXT,
+  severity TEXT,
+  image_url TEXT,
+  latitude FLOAT,
+  longitude FLOAT,
+  status TEXT DEFAULT 'Pending',
+  timestamp TIMESTAMP DEFAULT now()
+);
+```
 
-Security Policies
+* **Storage**
 
-Row Level Security (RLS) ensures users can only access their own data
+  * Bucket: `water_issues_images`
+  * Image access: authenticated user upload, public or signed URL read
 
-Admin dashboard uses service role for elevated permissions
+* **Row-Level Security (RLS)**
 
-⚙️ Tech Stack Summary
-Mobile App:
-Kotlin + Jetpack Compose
+```sql
+-- Only allow users to access their own reports
+CREATE POLICY "Users can insert their own reports"
+ON water_issues FOR INSERT
+WITH CHECK (auth.uid() = user_id);
 
-CameraX for image capture
+CREATE POLICY "Users can view their own reports"
+ON water_issues FOR SELECT
+USING (auth.uid() = user_id);
+```
 
-Supabase Kotlin SDK
+---
 
-Android Location APIs
+## ⚙️ Environment Setup
 
-Coil or Glide for image display
+### 📲 Android App
 
-Admin Dashboard:
-React + Vite or Next.js
+1. Clone:
 
-Supabase JS SDK
+   ```bash
+   git clone https://github.com/your-org/water-issues-mobile.git
+   ```
 
-Tailwind CSS or Material UI
+2. Add `local.properties`:
 
-Map (Google Maps / Leaflet)
+   ```
+   SUPABASE_URL=https://yourproject.supabase.co
+   SUPABASE_ANON_KEY=your-anon-key
+   ```
 
-Axios for HTTP requests
+3. Open in Android Studio and run on a device/emulator
 
-Backend:
-Supabase (PostgreSQL, Auth, Storage)
+---
 
-Shared DB used by both apps
+### 🖥️ Admin Dashboard
 
-🚀 Getting Started
-📲 Mobile App
-Clone the repo:
+1. Clone:
 
-bash
-Copy
-Edit
-git clone https://github.com/your-org/water-issues-mobile.git
-Set up your local.properties:
+   ```bash
+   git clone https://github.com/your-org/water-issues-dashboard.git
+   cd water-issues-dashboard
+   ```
 
-ini
-Copy
-Edit
-SUPABASE_URL=https://yourproject.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-Open in Android Studio and run.
+2. Create `.env`:
 
-🖥️ Web Admin Dashboard
-Clone the repo:
+   ```
+   VITE_SUPABASE_URL=https://yourproject.supabase.co
+   VITE_SUPABASE_KEY=your-service-role-key
+   ```
 
-bash
-Copy
-Edit
-git clone https://github.com/your-org/water-issues-dashboard.git
-Set up .env:
+3. Install dependencies & run:
 
-ini
-Copy
-Edit
-VITE_SUPABASE_URL=https://yourproject.supabase.co
-VITE_SUPABASE_KEY=your-service-role-key
-Run the dashboard:
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-arduino
-Copy
-Edit
-npm install
-npm run dev
-🔐 Access Control
-Authenticated users submit reports
+---
 
-Admins can view and manage all reports
+## 🔐 Access Control
 
-Supabase RLS ensures data integrity and privacy
+* **Mobile App**
 
+  * Users must log in to submit/view reports
+  * RLS restricts access to own data
+
+* **Admin Panel**
+
+  * Admin uses service role key to access all reports
+  * Admin can modify report status and view all data
+
+---
+
+## 📌 Future Enhancements
+
+* Push notifications for report updates
+* Offline caching and sync for remote users
+* Multilingual UI (English + Swahili)
+* AI-enhanced image processing (optional future feature)
+
+---
+
+## 📄 License
+
+MIT License © 2025 — Your Organization
+
+---
+
+## 📚 References
+
+* [Supabase Docs](https://supabase.com/docs)
+* [Jetpack Compose](https://developer.android.com/jetpack/compose)
+* [CameraX Guide](https://developer.android.com/training/camerax)
+* [Leaflet Maps](https://leafletjs.com/)
+* [Vite + React Docs](https://vitejs.dev/guide/)
+
+```
+
+---
+```
