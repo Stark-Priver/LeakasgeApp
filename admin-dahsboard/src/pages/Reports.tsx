@@ -9,7 +9,8 @@ import {
   Calendar,
   User,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { WaterReport } from '../lib/supabase';
