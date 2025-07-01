@@ -42,24 +42,24 @@ export default function Profile() {
   };
 
   const menuItems = [
-    {
-      icon: <Settings size={20} color="#6b7280" />,
-      title: 'Account Settings',
-      subtitle: 'Manage your account preferences',
-      onPress: () => Alert.alert('Coming Soon', 'Account settings will be available soon'),
-    },
-    {
-      icon: <Bell size={20} color="#6b7280" />,
-      title: 'Notifications',
-      subtitle: 'Configure notification preferences',
-      onPress: () => Alert.alert('Coming Soon', 'Notification settings will be available soon'),
-    },
-    {
-      icon: <Shield size={20} color="#6b7280" />,
-      title: 'Privacy & Security',
-      subtitle: 'Manage your privacy settings',
-      onPress: () => Alert.alert('Coming Soon', 'Privacy settings will be available soon'),
-    },
+    // {
+    //   icon: <Settings size={20} color="#6b7280" />,
+    //   title: 'Account Settings',
+    //   subtitle: 'Manage your account preferences',
+    //   onPress: () => Alert.alert('Coming Soon', 'Account settings will be available soon'),
+    // },
+    // {
+    //   icon: <Bell size={20} color="#6b7280" />,
+    //   title: 'Notifications',
+    //   subtitle: 'Configure notification preferences',
+    //   onPress: () => Alert.alert('Coming Soon', 'Notification settings will be available soon'),
+    // },
+    // {
+    //   icon: <Shield size={20} color="#6b7280" />,
+    //   title: 'Privacy & Security',
+    //   subtitle: 'Manage your privacy settings',
+    //   onPress: () => Alert.alert('Coming Soon', 'Privacy settings will be available soon'),
+    // },
     {
       icon: <HelpCircle size={20} color="#6b7280" />,
       title: 'Help & Support',

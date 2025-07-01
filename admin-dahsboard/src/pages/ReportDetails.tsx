@@ -16,6 +16,78 @@ import {
 import { supabase } from '../lib/supabase';
 import type { WaterReport } from '../lib/supabase';
 
+// Leaflet Map Component
+const LeafletMap = ({ latitude, longitude, address }) => {
+  const mapRef = React.useRef(null);
+  const mapInstanceRef = React.useRef(null);
+
+  useEffect(() => {
+    // Load Leaflet CSS and JS
+    if (!document.querySelector('link[href*="leaflet"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    const loadLeaflet = async () => {
+      if (window.L) {
+        initializeMap();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+      script.onload = initializeMap;
+      document.head.appendChild(script);
+    };
+
+    const initializeMap = () => {
+      if (!mapRef.current || !window.L || mapInstanceRef.current) return;
+
+      // Initialize map
+      const map = window.L.map(mapRef.current).setView([latitude, longitude], 15);
+      mapInstanceRef.current = map;
+
+      // Add tile layer
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Add marker
+      const marker = window.L.marker([latitude, longitude]).addTo(map);
+      
+      // Add popup with address or coordinates
+      const popupContent = address || `Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      marker.bindPopup(popupContent).openPopup();
+    };
+
+    if (latitude && longitude) {
+      loadLeaflet();
+    }
+
+    // Cleanup function
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [latitude, longitude, address]);
+
+  if (!latitude || !longitude) {
+    return null;
+  }
+
+  return (
+    <div 
+      ref={mapRef} 
+      className="h-72 w-full rounded-lg border border-gray-200"
+      style={{ minHeight: '288px' }}
+    />
+  );
+};
+
 export function ReportDetails() {
   const { id } = useParams<{ id: string }>();
   const [report, setReport] = useState<WaterReport | null>(null);
@@ -253,20 +325,28 @@ export function ReportDetails() {
             </div>
           )}
 
-          {/* Potential Map Placeholder - Only if coordinates exist */}
+          {/* Interactive Leaflet Map */}
           {(report.latitude && report.longitude) && (
             <div className={cardClassName}>
-              <h2 className="text-xl font-semibold text-gray-800 mb-5">Location Map</h2>
-              <div className="h-72 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
-                <div className="text-center p-4">
-                  <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
-                    Map integration (e.g., Leaflet, Google Maps) would show here.
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Using Coordinates: {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}
-                  </p>
-                </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
+                <MapPin className="h-5 w-5 mr-2.5 text-gray-600" />
+                Location Map
+              </h2>
+              <LeafletMap 
+                latitude={report.latitude} 
+                longitude={report.longitude}
+                address={report.location_address}
+              />
+              <div className="mt-3 text-sm text-gray-600 flex items-center justify-between">
+                <span>Coordinates: {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</span>
+                <a 
+                  href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  View in Google Maps
+                </a>
               </div>
             </div>
           )}

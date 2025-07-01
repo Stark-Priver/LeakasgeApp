@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Users, 
-  BarChart3, 
-  Settings, 
+import React, { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  FileText,
+  BarChart3,
+  Settings,
   LogOut,
   Menu,
   X,
-  Droplets
-} from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+  Droplets,
+} from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -23,40 +22,43 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Reports', href: '/reports', icon: FileText },
-    { name: 'Users', href: '/users', icon: Users },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-    { name: 'Settings', href: '/settings', icon: Settings },
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Reports", href: "/reports", icon: FileText },
+    { name: "Analytics", href: "/analytics", icon: BarChart3 },
+    { name: "Settings", href: "/settings", icon: Settings },
   ];
 
   const handleSignOut = async () => {
     try {
       await signOut();
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error("Error signing out:", error);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
       {/* Mobile menu overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-lg flex flex-col justify-between transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
+      <div
+        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-lg flex flex-col justify-between transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div>
           <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
             <div className="flex items-center space-x-2">
               <Droplets className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">WaterAdmin</span>
+              <span className="text-xl font-bold text-gray-900">
+                WaterAdmin
+              </span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -76,8 +78,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     to={item.href}
                     className={`flex items-center px-4 py-2 text-base font-medium rounded-lg transition-colors duration-200 gap-3 ${
                       isActive
-                        ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-700 font-semibold'
-                        : 'text-gray-600 hover:text-blue-700 hover:bg-gray-50'
+                        ? "bg-blue-50 text-blue-700 border-r-4 border-blue-700 font-semibold"
+                        : "text-gray-600 hover:text-blue-700 hover:bg-gray-50"
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
@@ -115,7 +117,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="flex-1 flex flex-col lg:pl-64">
         {/* Top bar */}
         <div className="bg-white shadow-sm border-b border-gray-200">
           <div className="px-4 sm:px-6 lg:px-8">
@@ -126,7 +128,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               >
                 <Menu className="h-6 w-6" />
               </button>
-              
+
               <div className="flex items-center space-x-4">
                 <div className="hidden sm:flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -138,10 +140,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
 
         {/* Page content */}
-        <main className="py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {children}
-          </div>
+        <main className="flex-1 py-6 overflow-y-auto px-4 sm:px-6 lg:px-8">
+          {children ? (
+            children
+          ) : (
+            <p className="text-center text-gray-400 text-sm mt-20">
+              No content available.
+            </p>
+          )}
         </main>
       </div>
     </div>
