@@ -9,18 +9,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export interface WaterReport {
   id: string;
   user_id: string;
-  issue_type: 'leakage' | 'water_quality' | 'other';
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  issue_type: 'leakage' | 'water_quality_problem' | 'other'; // Standardized
+  severity: 'low' | 'medium' | 'high' | 'critical'; // Standardized
   description: string;
-  location: string;
-  latitude: number;
-  longitude: number;
-  photo_url?: string;
-  status: 'pending' | 'in_progress' | 'resolved';
+  location_address?: string | null; // For manual text address
+  latitude?: number | null; // Optional if manual address is provided
+  longitude?: number | null; // Optional if manual address is provided
+  image_url?: string | null; // Standardized and optional
+  status: 'pending' | 'in_progress' | 'resolved'; // Standardized
   assigned_to?: string;
   created_at: string;
   updated_at: string;
-  user?: {
+  user?: { // This is a joined field, definition seems fine
     email: string;
     full_name?: string;
   };
