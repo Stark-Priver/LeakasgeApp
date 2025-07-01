@@ -57,10 +57,13 @@ export function Reports() {
 
     // Search filter
     if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(report => 
-        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.user?.email.toLowerCase().includes(searchTerm.toLowerCase())
+        report.description.toLowerCase().includes(lowerSearchTerm) ||
+        (report.location_address || '').toLowerCase().includes(lowerSearchTerm) ||
+        (report.user?.email || '').toLowerCase().includes(lowerSearchTerm) ||
+        (report.user?.full_name || '').toLowerCase().includes(lowerSearchTerm) ||
+        report.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
@@ -81,62 +84,86 @@ export function Reports() {
 
     // Sort
     filtered.sort((a, b) => {
-      let aValue = a[sortBy as keyof WaterReport];
-      let bValue = b[sortBy as keyof WaterReport];
+      let aValue, bValue;
 
-      if (sortBy === 'created_at') {
-        aValue = new Date(aValue as string).getTime();
-        bValue = new Date(bValue as string).getTime();
+      switch (sortBy) {
+        case 'created_at':
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+          break;
+        case 'severity':
+          // Define order for severity
+          const severityOrder = { 'low': 1, 'medium': 2, 'high': 3, 'critical': 4 };
+          aValue = severityOrder[a.severity] || 0;
+          bValue = severityOrder[b.severity] || 0;
+          break;
+        default:
+          aValue = a[sortBy as keyof WaterReport];
+          bValue = b[sortBy as keyof WaterReport];
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
       }
 
       if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
+        return aValue > bValue ? 1 : (aValue < bValue ? -1 : 0);
       } else {
-        return aValue < bValue ? 1 : -1;
+        return aValue < bValue ? 1 : (aValue > bValue ? -1 : 0);
       }
     });
 
     setFilteredReports(filtered);
   };
 
-  const updateReportStatus = async (reportId: string, newStatus: string) => {
+  const updateReportStatus = async (reportId: string, newStatus: WaterReport['status']) => {
     try {
       const { error } = await supabase
         .from('water_reports')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', reportId);
+        .eq('id', reportId)
+        .select() // Important to get the updated row back for single row updates
+        .single();
 
       if (error) throw error;
       
       // Update local state
       setReports(reports.map(report => 
         report.id === reportId 
-          ? { ...report, status: newStatus as any, updated_at: new Date().toISOString() }
+          ? { ...report, status: newStatus, updated_at: new Date().toISOString() }
           : report
       ));
     } catch (error) {
       console.error('Error updating report status:', error);
+      // Optionally, show an error to the user
     }
   };
 
-  const getSeverityColor = (severity: string) => {
+  const formatText = (text: string | null | undefined) => {
+    if (!text) return 'N/A';
+    return text.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const getSeverityBadgeStyle = (severity: WaterReport['severity']) => {
     switch (severity) {
-      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
-      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'critical': return 'bg-red-100 text-red-700 border-red-300';
+      case 'high': return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'low': return 'bg-green-100 text-green-700 border-green-300';
+      default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusSelectStyle = (status: WaterReport['status']) => {
     switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-200';
-      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'resolved': return 'bg-green-50 text-green-700 border-green-300 focus:ring-green-500';
+      case 'in_progress': return 'bg-blue-50 text-blue-700 border-blue-300 focus:ring-blue-500';
+      case 'pending': return 'bg-yellow-50 text-yellow-700 border-yellow-300 focus:ring-yellow-500';
+      default: return 'bg-gray-50 text-gray-700 border-gray-300 focus:ring-gray-500';
     }
   };
+
 
   if (loading) {
     return (
