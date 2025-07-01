@@ -342,8 +342,8 @@ export function Reports() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getSeverityColor(report.severity)}`}>
-                      {report.severity}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-semibold rounded-full border ${getSeverityBadgeStyle(report.severity)} capitalize`}>
+                      {formatText(report.severity)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
