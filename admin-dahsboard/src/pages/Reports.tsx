@@ -350,7 +350,7 @@ export function Reports() {
                     <select
                       value={report.status}
                       onChange={(e) => updateReportStatus(report.id, e.target.value)}
-                      className={`text-xs font-medium rounded-full border px-2 py-1 ${getStatusColor(report.status)}`}
+                      className={`text-xs font-medium rounded-lg border px-3 py-1.5 focus:outline-none focus:ring-2 appearance-none ${getStatusSelectStyle(report.status)}`}
                     >
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>
