@@ -54,7 +54,7 @@ export function Reports() {
         .select(
           `
           *,
-          user:users(email, full_name)
+          user:users(email, full_name, is_banned)
         `
         )
         .order("created_at", { ascending: false });
@@ -525,6 +525,7 @@ export function Reports() {
                       <div>
                         <div className="text-sm font-medium text-gray-900" title={report.user?.full_name || report.user?.email || 'Anonymous'}>
                           {report.user?.full_name || report.user?.email || 'Anonymous'}
+                          {report.user?.is_banned && <span className="text-red-500 ml-1">(Banned)</span>}
                         </div>
                         {report.user?.full_name && report.user?.email && (
                           <div className="text-xs text-gray-500" title={report.user.email}>
