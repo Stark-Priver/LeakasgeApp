@@ -8,7 +8,8 @@ import {
   Calendar,
   Shield,
   User as UserIcon,
-  MoreVertical
+  MoreVertical,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '../lib/supabase';
@@ -33,7 +34,7 @@ export function Users() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('*, is_banned') // Ensure is_banned is selected
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -42,6 +43,30 @@ export function Users() {
       console.error('Error fetching users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleUserBanStatus = async (userId: string, currentIsBanned: boolean) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ is_banned: !currentIsBanned })
+        .eq('id', userId)
+        .select()
+        .single(); // Assuming you want the updated user back
+
+      if (error) throw error;
+
+      if (data) {
+        setUsers(prevUsers =>
+          prevUsers.map(user =>
+            user.id === userId ? { ...user, is_banned: data.is_banned } : user
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error updating user ban status:', error);
+      // Optionally, show an error to the user (e.g., using a toast notification)
     }
   };
 
@@ -182,20 +207,35 @@ export function Users() {
 
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700">Status</span>
-                  <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-200">
-                    Active
-                  </span>
+                  {user.is_banned ? (
+                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 border border-red-200">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Banned
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-200">
+                      Active
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="mt-6 flex items-center space-x-2">
-                <button className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                <button // This is the existing Edit button, kept for context if needed by user
+                  className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
                 </button>
-                <button className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200">
-                  <Mail className="h-4 w-4 mr-1" />
-                  Contact
+                <button
+                  onClick={() => toggleUserBanStatus(user.id, user.is_banned)}
+                  className={`flex-1 inline-flex items-center justify-center px-3 py-2 border text-sm font-medium rounded-lg transition-colors duration-200
+                              ${user.is_banned
+                                ? 'border-yellow-500 text-yellow-700 bg-yellow-50 hover:bg-yellow-100'
+                                : 'border-red-500 text-red-700 bg-red-50 hover:bg-red-100'}`}
+                >
+                  {user.is_banned ? <UserIcon className="h-4 w-4 mr-1" /> : <AlertTriangle className="h-4 w-4 mr-1" />}
+                  {user.is_banned ? 'Unban User' : 'Ban User'}
                 </button>
               </div>
             </div>

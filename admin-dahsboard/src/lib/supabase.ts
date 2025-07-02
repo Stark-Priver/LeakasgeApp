@@ -21,9 +21,10 @@ export interface WaterReport {
   assigned_to?: string;
   created_at: string;
   updated_at: string;
-  user?: { // This is a joined field, definition seems fine
+  user?: {
     email: string;
     full_name?: string;
+    is_banned?: boolean; // Added is_banned
   };
 }
 
@@ -32,5 +33,6 @@ export interface User {
   email: string;
   full_name?: string;
   role: 'user' | 'admin' | 'technician';
+  is_banned: boolean;
   created_at: string;
 }
