@@ -475,6 +475,9 @@ export function Reports() {
                   Severity
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Reporter
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -515,6 +518,21 @@ export function Reports() {
                     >
                       {formatText(report.severity)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <User className="h-4 w-4 text-gray-400 mr-1.5 flex-shrink-0" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900" title={report.user?.full_name || report.user?.email || 'Anonymous'}>
+                          {report.user?.full_name || report.user?.email || 'Anonymous'}
+                        </div>
+                        {report.user?.full_name && report.user?.email && (
+                          <div className="text-xs text-gray-500" title={report.user.email}>
+                            {report.user.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
