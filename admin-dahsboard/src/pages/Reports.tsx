@@ -12,12 +12,42 @@ import {
   RefreshCw,
   FileText,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import type { WaterReport } from "../lib/supabase";
+import { supabase } from "../lib/supabase"; // Keep for auth and potentially geocoding fallback
+import type { WaterReport as SupabaseWaterReport } from "../lib/supabase"; // Keep original type for reference or specific Supabase interactions if any remain
+import { useAuth } from "../contexts/AuthContext"; // To get user session/token easily if exposed, otherwise use supabase.auth.getSession()
+
+// Define a type for the report structure expected from the new API
+// This should align with what Prisma returns, including the nested user.
+// For now, it's similar to SupabaseWaterReport but good to define separately.
+export interface ApiWaterReport {
+  id: string;
+  user_id: string;
+  issue_type: 'LEAKAGE' | 'WATER_QUALITY_PROBLEM' | 'OTHER'; // Note: Enums from Prisma are uppercase
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; // Note: Enums from Prisma are uppercase
+  description: string;
+  location_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  image_urls?: string[] | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED'; // Note: Enums from Prisma are uppercase
+  assigned_to?: string;
+  createdAt: string; // Prisma uses ISO string
+  updatedAt: string; // Prisma uses ISO string
+  user?: { // User object structure from API
+    email: string;
+    full_name?: string | null;
+    // is_banned is not directly in the API response for reports, but might be in a /users API
+  };
+  // Supabase specific fields like 'location' are not in the Prisma model unless added.
+  // For now, assuming 'location' was derived or an alias.
+}
+
+
+const API_BASE_URL = "http://localhost:3001/api"; // Should be in .env ideally
 
 export function Reports() {
-  const [reports, setReports] = useState<WaterReport[]>([]);
-  const [filteredReports, setFilteredReports] = useState<WaterReport[]>([]);
+  const [reports, setReports] = useState<ApiWaterReport[]>([]);
+  const [filteredReports, setFilteredReports] = useState<ApiWaterReport[]>([]); // Changed type
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -49,22 +79,30 @@ export function Reports() {
     if (isRefresh) setRefreshing(true);
     
     try {
-      const { data, error } = await supabase
-        .from("water_reports")
-        .select(
-          `
-          *,
-          user:users(email, full_name, is_banned)
-        `
-        )
-        .order("created_at", { ascending: false });
+      const session = await supabase.auth.getSession();
+      const token = session?.data.session?.access_token;
 
-      if (error) throw error;
+      if (!token) {
+        throw new Error("No authentication token found. Please log in.");
+      }
+
+      const response = await fetch(`${API_BASE_URL}/reports`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch reports: ${response.statusText}`);
+      }
+
+      const data: ApiWaterReport[] = await response.json();
       
-      // Process reports to extract location from coordinates if needed
+      // Process reports to extract location from coordinates if needed (client-side geocoding)
+      // Note: Prisma enums are uppercase, Supabase might have been lowercase. Adjust UI if needed.
       const processedReports = await Promise.all(
         (data || []).map(async (report) => {
-          // If location_address is empty but we have coordinates, try to get address
           if (!report.location_address && report.latitude && report.longitude) {
             try {
               const address = await reverseGeocode(report.latitude, report.longitude);
@@ -79,38 +117,32 @@ export function Reports() {
       );
       
       setReports(processedReports);
-    } catch (error) {
-      console.error("Error fetching reports:", error);
-      // You might want to show a toast notification here
+    } catch (error: any) {
+      console.error("Error fetching reports:", error.message || error);
+      // You might want to show a toast notification here using error.message
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
     }
   };
 
-  // Reverse geocoding function to get address from coordinates
+  // Reverse geocoding function to get address from coordinates - this remains client-side for now
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
     try {
-      // Using OpenStreetMap Nominatim API (free)
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
-      
       if (!response.ok) throw new Error('Geocoding failed');
-      
       const data = await response.json();
-      
-      // Format the address nicely
-      const address = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      return address;
+      return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     } catch (error) {
-      // Fallback to coordinates if geocoding fails
-      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      console.warn("Geocoding fallback:", error); // Log warning instead of error for fallback
+      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; // Fallback to coordinates
     }
   };
 
   const applyFilters = () => {
-    let filtered = [...reports];
+    let filtered: ApiWaterReport[] = [...reports];
 
     // Search filter
     if (searchTerm) {
@@ -118,55 +150,52 @@ export function Reports() {
       filtered = filtered.filter(
         (report) =>
           report.description.toLowerCase().includes(lowerSearchTerm) ||
-          (report.location_address || "")
-            .toLowerCase()
-            .includes(lowerSearchTerm) ||
-          (report.location || "")
-            .toLowerCase()
-            .includes(lowerSearchTerm) ||
+          (report.location_address || "").toLowerCase().includes(lowerSearchTerm) ||
           (report.user?.email || "").toLowerCase().includes(lowerSearchTerm) ||
-          (report.user?.full_name || "")
-            .toLowerCase()
-            .includes(lowerSearchTerm) ||
+          (report.user?.full_name || "").toLowerCase().includes(lowerSearchTerm) ||
           report.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
-    // Status filter
+    // Status, Severity, Type filters
+    // Assumes filter values from select dropdowns are now uppercase (e.g. "PENDING", "LOW", "LEAKAGE")
     if (statusFilter !== "all") {
       filtered = filtered.filter((report) => report.status === statusFilter);
     }
-
-    // Severity filter
     if (severityFilter !== "all") {
-      filtered = filtered.filter(
-        (report) => report.severity === severityFilter
-      );
+      filtered = filtered.filter((report) => report.severity === severityFilter);
     }
-
-    // Type filter
     if (typeFilter !== "all") {
       filtered = filtered.filter((report) => report.issue_type === typeFilter);
     }
 
     // Sort
     filtered.sort((a, b) => {
-      let aValue, bValue;
+      let aValue: any, bValue: any;
 
       switch (sortBy) {
-        case "created_at":
-          aValue = new Date(a.created_at).getTime();
-          bValue = new Date(b.created_at).getTime();
+        case "created_at": // Field in ApiWaterReport is 'createdAt'
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
           break;
-        case "severity":
-          // Define order for severity
-          const severityOrder = { low: 1, medium: 2, high: 3, critical: 4 };
+        case "severity": // Severity values in ApiWaterReport are 'LOW', 'MEDIUM', etc.
+          const severityOrder: { [key in ApiWaterReport["severity"]]: number } = {
+            LOW: 1,
+            MEDIUM: 2,
+            HIGH: 3,
+            CRITICAL: 4,
+          };
           aValue = severityOrder[a.severity] || 0;
           bValue = severityOrder[b.severity] || 0;
           break;
         default:
-          aValue = a[sortBy as keyof WaterReport];
-          bValue = b[sortBy as keyof WaterReport];
+           // Check if sortBy is a valid key of ApiWaterReport
+          if (sortBy in a && sortBy in b) {
+            aValue = (a as any)[sortBy];
+            bValue = (b as any)[sortBy];
+          } else {
+            aValue = 0; bValue = 0; // Default or handle error
+          }
       }
 
       if (typeof aValue === "string" && typeof bValue === "string") {
@@ -186,58 +215,71 @@ export function Reports() {
 
   const updateReportStatus = async (
     reportId: string,
-    newStatus: WaterReport["status"]
+    newStatus: ApiWaterReport["status"] // Expects 'PENDING', 'IN_PROGRESS', or 'RESOLVED'
   ) => {
     try {
-      const { error } = await supabase
-        .from("water_reports")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", reportId)
-        .select() // Important to get the updated row back for single row updates
-        .single();
+      const session = await supabase.auth.getSession(); // Still use supabase for auth token
+      const token = session?.data.session?.access_token;
+      if (!token) {
+        throw new Error("Authentication token not found.");
+      }
 
-      if (error) throw error;
+      const response = await fetch(`${API_BASE_URL}/reports/${reportId}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }), // API expects uppercase status
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update report status: ${response.statusText}`);
+      }
+
+      const updatedReportFromServer: ApiWaterReport = await response.json();
 
       // Update local state
       setReports(
         reports.map((report) =>
-          report.id === reportId
-            ? {
-                ...report,
-                status: newStatus,
-                updated_at: new Date().toISOString(),
-              }
-            : report
+          report.id === reportId ? updatedReportFromServer : report
         )
       );
-    } catch (error) {
-      console.error("Error updating report status:", error);
-      // Optionally, show an error to the user
+      // Also update filteredReports to reflect the change immediately if it's displayed
+      setFilteredReports(
+        filteredReports.map((report) =>
+          report.id === reportId ? updatedReportFromServer : report
+        )
+      );
+
+    } catch (error: any) {
+      console.error("Error updating report status:", error.message || error);
+      // Optionally, show an error to the user (e.g., using a toast notification)
     }
   };
 
   // CSV Export functionality
   const exportToCSV = async () => {
     setExporting(true);
-    
     try {
-      // Prepare data for CSV
+      // Prepare data for CSV using ApiWaterReport structure
       const csvData = filteredReports.map(report => ({
         'Report ID': report.id,
-        'Issue Type': formatText(report.issue_type),
+        'Issue Type': formatText(report.issue_type), // formatText needs to handle uppercase enums
         'Description': report.description,
-        'Location': report.location_address || report.location || 'N/A',
+        'Location': report.location_address || 'N/A', // No 'location' field in ApiWaterReport
         'Coordinates': report.latitude && report.longitude 
           ? `${report.latitude}, ${report.longitude}` 
           : 'N/A',
-        'Severity': formatText(report.severity),
-        'Status': formatText(report.status),
+        'Severity': formatText(report.severity), // formatText needs to handle uppercase enums
+        'Status': formatText(report.status),     // formatText needs to handle uppercase enums
         'Reported By': report.user?.full_name || report.user?.email || 'Anonymous',
-        'Created Date': new Date(report.created_at).toLocaleDateString(),
-        'Updated Date': new Date(report.updated_at).toLocaleDateString(),
+        'Created Date': new Date(report.createdAt).toLocaleDateString(), // Use createdAt
+        'Updated Date': new Date(report.updatedAt).toLocaleDateString(), // Use updatedAt
       }));
 
-      // Convert to CSV string
+      // Convert to CSV string (logic remains the same)
       const headers = Object.keys(csvData[0] || {});
       const csvContent = [
         headers.join(','),
@@ -278,47 +320,52 @@ export function Reports() {
 
   const formatText = (text: string | null | undefined) => {
     if (!text) return "N/A";
+    // Handles uppercase enums like 'WATER_QUALITY_PROBLEM' or 'IN_PROGRESS'
     return text
+      .toLowerCase() // Convert to lowercase first for consistent splitting
       .split("_")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
   };
 
-  const getSeverityBadgeStyle = (severity: WaterReport["severity"]) => {
+  const getSeverityBadgeStyle = (severity: ApiWaterReport["severity"]) => {
+    // Severity is already uppercase from API: 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
     switch (severity) {
-      case "critical":
+      case "CRITICAL":
         return "bg-red-100 text-red-700 border-red-300";
-      case "high":
+      case "HIGH":
         return "bg-orange-100 text-orange-700 border-orange-300";
-      case "medium":
+      case "MEDIUM":
         return "bg-yellow-100 text-yellow-700 border-yellow-300";
-      case "low":
+      case "LOW":
         return "bg-green-100 text-green-700 border-green-300";
       default:
         return "bg-gray-100 text-gray-700 border-gray-300";
     }
   };
 
-  const getStatusSelectStyle = (status: WaterReport["status"]) => {
+  const getStatusSelectStyle = (status: ApiWaterReport["status"]) => {
+    // Status is already uppercase from API: 'PENDING', 'IN_PROGRESS', 'RESOLVED'
     switch (status) {
-      case "resolved":
+      case "RESOLVED":
         return "bg-green-50 text-green-700 border-green-300 focus:ring-green-500";
-      case "in_progress":
+      case "IN_PROGRESS":
         return "bg-blue-50 text-blue-700 border-blue-300 focus:ring-blue-500";
-      case "pending":
+      case "PENDING":
         return "bg-yellow-50 text-yellow-700 border-yellow-300 focus:ring-yellow-500";
       default:
         return "bg-gray-50 text-gray-700 border-gray-300 focus:ring-gray-500";
     }
   };
 
-  const getDisplayLocation = (report: WaterReport) => {
+  const getDisplayLocation = (report: ApiWaterReport) => {
     if (report.location_address) {
       return report.location_address;
     }
-    if (report.location) {
-      return report.location;
-    }
+    // No 'location' field in ApiWaterReport, remove this part
+    // if (report.location) {
+    //   return report.location;
+    // }
     if (report.latitude && report.longitude) {
       return `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`;
     }
@@ -388,9 +435,9 @@ export function Reports() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="resolved">Resolved</option>
+              <option value="PENDING">Pending</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="RESOLVED">Resolved</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           </div>
@@ -403,10 +450,10 @@ export function Reports() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               <option value="all">All Severity</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="CRITICAL">Critical</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           </div>
@@ -419,9 +466,9 @@ export function Reports() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               <option value="all">All Types</option>
-              <option value="leakage">Leakage</option>
-              <option value="water_quality">Water Quality</option>
-              <option value="other">Other</option>
+              <option value="LEAKAGE">Leakage</option>
+              <option value="WATER_QUALITY_PROBLEM">Water Quality</option>
+              <option value="OTHER">Other</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           </div>
@@ -537,23 +584,23 @@ export function Reports() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
-                      value={report.status}
+                      value={report.status} // This will be 'PENDING', 'IN_PROGRESS', etc.
                       onChange={(e) =>
-                        updateReportStatus(report.id, e.target.value)
+                        updateReportStatus(report.id, e.target.value as ApiWaterReport["status"])
                       }
                       className={`text-xs font-medium rounded-lg border px-3 py-1.5 focus:outline-none focus:ring-2 appearance-none ${getStatusSelectStyle(
                         report.status
                       )}`}
                     >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="resolved">Resolved</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="IN_PROGRESS">In Progress</option>
+                      <option value="RESOLVED">Resolved</option>
                     </select>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center text-sm text-gray-900">
                       <Calendar className="h-4 w-4 text-gray-400 mr-1" />
-                      {new Date(report.created_at).toLocaleDateString()}
+                      {new Date(report.createdAt).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
