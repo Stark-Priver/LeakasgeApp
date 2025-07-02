@@ -11,33 +11,36 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { WaterIssue } from '@/types/database';
-import { Clock, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, MapPin, Calendar } from 'lucide-react-native';
+import { WaterReport } from '@/types/database'; // Changed from WaterIssue to WaterReport
+import { Clock, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, MapPin, Calendar, Image as ImageIcon, Images } from 'lucide-react-native'; // Added ImageIcon
 
 export default function MyReports() {
-  const [issues, setIssues] = useState<WaterIssue[]>([]);
+  const [reports, setReports] = useState<WaterReport[]>([]); // Changed from issues to reports
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
-    fetchIssues();
-  }, []);
+    if (user) { // Ensure user is available before fetching
+      fetchReports();
+    }
+  }, [user]); // Add user as a dependency
 
-  const fetchIssues = async () => {
+  const fetchReports = async () => { // Renamed from fetchIssues
     if (!user) return;
-    
+    setLoading(true); // Ensure loading is true at the start of a fetch
     try {
       const { data, error } = await supabase
-        .from('water_issues')
+        .from('water_reports') // Changed from water_issues to water_reports
         .select('*')
         .eq('user_id', user.id)
-        .order('timestamp', { ascending: false });
+        .order('created_at', { ascending: false }); // Changed from timestamp to created_at
 
       if (error) throw error;
-      setIssues(data || []);
+      setReports(data || []); // Changed from setIssues to setReports
     } catch (error) {
-      console.error('Error fetching issues:', error);
+      console.error('Error fetching reports:', error);
+      // Consider setting an error state here to display to the user
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -46,78 +49,96 @@ export default function MyReports() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchIssues();
+    fetchReports(); // Renamed from fetchIssues
   };
 
-  const getSeverityColor = (severity: string) => {
+  const formatTitleCase = (str: string | null | undefined) => {
+    if (!str) return 'N/A';
+    return str.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+  };
+
+  const getSeverityColor = (severity: WaterReport['severity'] | undefined) => {
     switch (severity) {
-      case 'Low': return '#10b981';
-      case 'Medium': return '#f59e0b';
-      case 'High': return '#f97316';
-      case 'Critical': return '#ef4444';
+      case 'low': return '#10b981';      // Green-500
+      case 'medium': return '#f59e0b';   // Amber-500
+      case 'high': return '#f97316';     // Orange-500
+      case 'critical': return '#ef4444'; // Red-500
       default: return '#6b7280';
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: WaterReport['status'] | undefined) => {
     switch (status) {
-      case 'Pending': return <Clock size={16} color="#f59e0b" />;
-      case 'In Progress': return <AlertTriangle size={16} color="#3b82f6" />;
-      case 'Resolved': return <CheckCircle size={16} color="#10b981" />;
-      default: return <Clock size={16} color="#6b7280" />;
+      case 'pending': return <Clock size={16} color="#d97706" />;        // Amber-600
+      case 'in_progress': return <AlertTriangle size={16} color="#2563eb" />; // Blue-600
+      case 'resolved': return <CheckCircle size={16} color="#059669" />;  // Green-600
+      default: return <Clock size={16} color="#4b5563" />;        // Gray-600
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBackgroundColor = (status: WaterReport['status'] | undefined) => {
     switch (status) {
-      case 'Pending': return '#fef3c7';
-      case 'In Progress': return '#dbeafe';
-      case 'Resolved': return '#d1fae5';
-      default: return '#f3f4f6';
+      case 'pending': return '#fef3c7';    // Amber-100
+      case 'in_progress': return '#dbeafe'; // Blue-100
+      case 'resolved': return '#d1fae5';   // Green-100
+      default: return '#f3f4f6';       // Gray-100
     }
   };
 
-  const renderIssueItem = ({ item }: { item: WaterIssue }) => (
-    <View style={styles.issueCard}>
-      <View style={styles.issueHeader}>
-        <View style={styles.issueInfo}>
-          <Text style={styles.issueType}>{item.type}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            {getStatusIcon(item.status)}
-            <Text style={styles.statusText}>{item.status}</Text>
+  const renderReportItem = ({ item }: { item: WaterReport }) => {
+    const displayLocation = item.location_address
+      ? item.location_address
+      : (item.latitude && item.longitude)
+        ? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`
+        : 'Location not specified';
+
+    return (
+      <View style={styles.reportCard}>
+        <View style={styles.reportHeader}>
+          <View style={styles.reportInfo}>
+            <Text style={styles.reportIssueType}>{formatTitleCase(item.issue_type)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusBackgroundColor(item.status) }]}>
+              {getStatusIcon(item.status)}
+              <Text style={styles.statusText}>{formatTitleCase(item.status)}</Text>
+            </View>
+          </View>
+          <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+            <Text style={styles.severityText}>{formatTitleCase(item.severity)}</Text>
           </View>
         </View>
-        <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
-          <Text style={styles.severityText}>{item.severity}</Text>
+
+        {item.description && <Text style={styles.reportDescription}>{item.description}</Text>}
+
+        {(item.image_urls && item.image_urls.length > 0) ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+            {item.image_urls.map((url, index) => (
+              <Image key={index} source={{ uri: url }} style={styles.reportImage} />
+            ))}
+          </ScrollView>
+        ) : item.image_url ? ( // Fallback for single image_url
+          <Image source={{ uri: item.image_url }} style={[styles.reportImage, styles.singleReportImage]} />
+        ) : null}
+
+
+        <View style={styles.reportFooter}>
+          <View style={styles.footerItem}>
+            <MapPin size={14} color="#6b7280" />
+            <Text style={styles.footerText} numberOfLines={1} ellipsizeMode="tail">{displayLocation}</Text>
+          </View>
+          <View style={styles.footerItem}>
+            <Calendar size={14} color="#6b7280" />
+            <Text style={styles.footerText}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          </View>
         </View>
       </View>
-
-      {item.image_url && (
-        <Image source={{ uri: item.image_url }} style={styles.issueImage} />
-      )}
-
-      <Text style={styles.issueDescription}>{item.description}</Text>
-
-      <View style={styles.issueFooter}>
-        <View style={styles.footerItem}>
-          <MapPin size={14} color="#6b7280" />
-          <Text style={styles.footerText}>
-            {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
-          </Text>
-        </View>
-        <View style={styles.footerItem}>
-          <Calendar size={14} color="#6b7280" />
-          <Text style={styles.footerText}>
-            {new Date(item.timestamp).toLocaleDateString()}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Clock size={64} color="#d1d5db" />
+      <Images size={64} color="#d1d5db" />
       <Text style={styles.emptyTitle}>No reports yet</Text>
       <Text style={styles.emptyText}>
         Your reported water issues will appear here
@@ -133,17 +154,17 @@ export default function MyReports() {
       </View>
 
       <FlatList
-        data={issues}
+        data={reports} // Changed from issues to reports
         keyExtractor={(item) => item.id}
-        renderItem={renderIssueItem}
+        renderItem={renderReportItem} // Changed from renderIssueItem
         ListEmptyComponent={renderEmptyState}
         contentContainerStyle={[
           styles.listContainer,
-          issues.length === 0 && styles.emptyListContainer,
+          reports.length === 0 && styles.emptyListContainer, // Changed from issues to reports
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} tintColor={'#2563eb'}/>
         }
       />
     </SafeAreaView>
@@ -181,24 +202,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  issueCard: {
+  reportCard: { // Renamed from issueCard
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    gap: 12,
+    gap: 12, // Applied gap here for overall spacing within card
   },
-  issueHeader: {
+  reportHeader: { // Renamed from issueHeader
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  issueInfo: {
-    flex: 1,
+  reportInfo: { // Renamed from issueInfo
+    flex: 1, // Takes available space
     gap: 8,
   },
-  issueType: {
+  reportIssueType: { // Renamed from issueType
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
     color: '#1f2937',
@@ -210,37 +231,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-start', // Important to keep badge size to its content
   },
   statusText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
-    color: '#374151',
+    color: '#374151', // Darker text for better contrast on light badges
   },
   severityBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   severityText: {
     fontSize: 12,
     fontFamily: 'Inter-SemiBold',
     color: '#ffffff',
   },
-  issueImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
+  imageScrollView: {
+    marginTop: 4, // Add some space above the image scroll view
+    marginBottom: 4, // Add some space below the image scroll view
   },
-  issueDescription: {
+  reportImage: { // Renamed from issueImage
+    width: 100, // Smaller width for scrolled images
+    height: 100, // Smaller height for scrolled images
+    borderRadius: 8,
+    marginRight: 10, // Space between images in scroll view
+    backgroundColor: '#f3f4f6', // Placeholder color
+  },
+  singleReportImage: { // Style for when there's only one image (fallback)
+    width: '100%',
+    height: 200, // Larger for single image
+    marginRight: 0, // No margin if it's the only one
+  },
+  reportDescription: { // Renamed from issueDescription
     fontSize: 15,
     fontFamily: 'Inter-Regular',
     color: '#374151',
     lineHeight: 22,
   },
-  issueFooter: {
+  reportFooter: { // Renamed from issueFooter
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center', // Align items vertically in the footer
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',

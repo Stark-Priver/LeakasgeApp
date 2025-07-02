@@ -11,7 +11,8 @@ export interface WaterReport {
   issue_type: 'leakage' | 'water_quality_problem' | 'other';
   description: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  image_url?: string | null; // Image is optional
+  image_urls?: string[] | null; // Multiple images are optional
+  image_url?: string | null; // Optional: for backward compatibility if needed, but prefer image_urls
   latitude?: number | null; // Optional if manual address is provided
   longitude?: number | null; // Optional if manual address is provided
   location_address?: string | null; // For manually entered address
@@ -26,7 +27,7 @@ export interface WaterReportInsert {
   issue_type: 'leakage' | 'water_quality_problem' | 'other';
   description: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  image_url?: string | null;
+  image_urls?: string[] | null; // Changed from image_url to image_urls
   latitude?: number | null;
   longitude?: number | null;
   location_address?: string | null;

@@ -307,7 +307,27 @@ export function ReportDetails() {
           </div>
 
           {/* Photo Evidence */}
-          {report.image_url && (
+          {(report.image_urls && report.image_urls.length > 0) ? (
+            <div className={cardClassName}>
+              <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
+                <Camera className="h-5 w-5 mr-2.5 text-gray-600" />
+                Photo Evidence ({report.image_urls.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {report.image_urls.map((url, index) => (
+                  <div key={index} className="rounded-lg overflow-hidden border border-gray-200 aspect-w-1 aspect-h-1">
+                    <a href={url} target="_blank" rel="noopener noreferrer" title={`View full image ${index + 1}`}>
+                      <img
+                        src={url}
+                        alt={`Report evidence ${index + 1}`}
+                        className="w-full h-full object-cover bg-gray-100 hover:opacity-90 transition-opacity"
+                      />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : report.image_url ? ( // Fallback for old single image_url
             <div className={cardClassName}>
               <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
                 <Camera className="h-5 w-5 mr-2.5 text-gray-600" />
@@ -323,7 +343,7 @@ export function ReportDetails() {
                 </a>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Interactive Leaflet Map */}
           {(report.latitude && report.longitude) && (

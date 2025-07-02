@@ -37,7 +37,7 @@ export default function Report() {
   const [selectedType, setSelectedType] = useState<string | undefined>(undefined);
   const [selectedSeverity, setSelectedSeverity] = useState<string | undefined>(undefined);
   const [description, setDescription] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]); // Changed from imageUri to imageUris
   const [gpsLocation, setGpsLocation] = useState<Location.LocationObject | null>(null);
   const [manualLocationAddress, setManualLocationAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +99,8 @@ export default function Report() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      //setImageUri(result.assets[0].uri);
+      setImageUris(prevUris => [...prevUris, result.assets[0].uri]);
       setUploadError(null); // Clear previous upload error
     }
   };
@@ -117,42 +118,61 @@ export default function Report() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      //setImageUri(result.assets[0].uri);
+      setImageUris(prevUris => [...prevUris, result.assets[0].uri]);
       setUploadError(null); // Clear previous upload error
     }
   };
 
-  const uploadImage = async (uri: string): Promise<string | null> => {
-    if (!uri) return null;
+  const removeImage = (uriToRemove: string) => {
+    setImageUris(prevUris => prevUris.filter(uri => uri !== uriToRemove));
+  };
+
+  const uploadImages = async (uris: string[]): Promise<string[]> => {
+    if (!uris || uris.length === 0) return [];
     setUploadError(null);
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileExt = uri.split('.').pop();
-      const fileName = `report-${Date.now()}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`; // Organize by user ID
+    const uploadedUrls: string[] = [];
+    let anyUploadFailed = false;
 
-      const { data, error: uploadError } = await supabase.storage
-        .from('issuesimages') // Corrected bucket name
-        .upload(filePath, blob, {
-            contentType: blob.type, // Important for correct file handling
-            upsert: false
-        });
+    for (const uri of uris) {
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const fileExt = uri.split('.').pop();
+        const fileName = `report-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${user?.id || 'anonymous'}/${fileName}`; // Organize by user ID
 
-      if (uploadError) {
-        throw uploadError;
+        const { error: uploadError } = await supabase.storage
+          .from('issuesimages')
+          .upload(filePath, blob, {
+              contentType: blob.type,
+              upsert: false
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('issuesimages')
+          .getPublicUrl(filePath);
+
+        if (publicUrl) {
+          uploadedUrls.push(publicUrl);
+        } else {
+          console.warn('Successfully uploaded image but failed to get public URL for:', uri);
+          // anyUploadFailed = true; // Decide if this constitutes a failure
+        }
+      } catch (error: any) {
+        console.error('Error uploading image:', error);
+        anyUploadFailed = true;
+        // Continue trying to upload other images
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('issuesimages')
-        .getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-      setUploadError(`Image upload failed: ${error.message}. Report will be submitted without image.`);
-      return null; // Return null on failure
     }
+    if (anyUploadFailed) {
+        setUploadError(`One or more images failed to upload. Report will be submitted with successfully uploaded images.`);
+    }
+    return uploadedUrls;
   };
 
   const submitReport = async () => {
@@ -171,12 +191,11 @@ export default function Report() {
 
     setIsSubmitting(true);
     setUploadError(null);
-    let imageUrl: string | null = null;
+    let uploadedImageUrls: string[] = [];
 
-    if (imageUri) {
-      imageUrl = await uploadImage(imageUri);
-      // If uploadError state was set by uploadImage, it will be displayed.
-      // No need to Alert here again, proceed with submission.
+    if (imageUris.length > 0) {
+      uploadedImageUrls = await uploadImages(imageUris);
+      // uploadImages function sets uploadError state if any image fails.
     }
 
     const reportData: WaterReportInsert = {
@@ -184,7 +203,7 @@ export default function Report() {
       issue_type: selectedType as WaterReportInsert['issue_type'],
       description: description.trim(),
       severity: selectedSeverity as WaterReportInsert['severity'],
-      image_url: imageUrl,
+      image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : null,
       latitude: gpsLocation?.coords.latitude,
       longitude: gpsLocation?.coords.longitude,
       location_address: manualLocationAddress.trim() || null,
@@ -207,7 +226,7 @@ export default function Report() {
       setSelectedType(undefined);
       setSelectedSeverity(undefined);
       setDescription('');
-      setImageUri(null);
+      setImageUris([]);
       setGpsLocation(null);
       setManualLocationAddress('');
 
@@ -309,21 +328,20 @@ export default function Report() {
 
           {/* Photo Evidence */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Photo Evidence</Text>
-            {imageUri ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-                <View style={styles.imageActions}>
-                    <TouchableOpacity style={styles.changeImageButton} onPress={pickImage}>
-                        <ImageIcon size={18} color="#2563EB" />
-                        <Text style={styles.changeImageText}>Change</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.removeImageButton} onPress={() => {setImageUri(null); setUploadError(null)}}>
-                        <Text style={styles.removeImageText}>Remove</Text>
-                    </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Photo Evidence ({imageUris.length} image{imageUris.length === 1 ? '' : 's'})</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagePreviewsScrollView}>
+              {imageUris.map((uri, index) => (
+                <View key={index} style={styles.imagePreviewItem}>
+                  <Image source={{ uri }} style={styles.imagePreview} />
+                  <TouchableOpacity style={styles.removeImageButton} onPress={() => removeImage(uri)}>
+                    <Text style={styles.removeImageButtonText}>✕</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            ) : (
+              ))}
+            </ScrollView>
+
+            {imageUris.length < 5 && ( // Limit to 5 images for example
               <View style={styles.photoButtonsContainer}>
                 <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
                   <Camera size={22} color="#2563EB" />
@@ -335,6 +353,10 @@ export default function Report() {
                 </TouchableOpacity>
               </View>
             )}
+            {imageUris.length > 0 && imageUris.length >= 5 && (
+                <Text style={styles.maxImagesText}>Maximum 5 images allowed.</Text>
+            )}
+
             {uploadError && (
               <View style={styles.uploadErrorContainer}>
                 <AlertCircle size={16} color="#ef4444" />
@@ -487,49 +509,45 @@ const styles = StyleSheet.create({
     minHeight: 120, // Increased height
     textAlignVertical: 'top',
   },
-  imagePreviewContainer: {
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    backgroundColor: '#f3f4f6',
+  imagePreviewsScrollView: {
+    paddingVertical: 10,
+  },
+  imagePreviewItem: {
+    position: 'relative',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     borderRadius: 8,
+    overflow: 'hidden', // Ensures the remove button corners are clipped if it overlaps
   },
   imagePreview: {
-    width: '100%',
-    height: 220, // Larger preview
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e5e7eb'
-  },
-  imageActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  changeImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#e0e7ff', // Lighter blue for less emphasis than main action
-  },
-  changeImageText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#2563EB',
+    width: 120, // Fixed width for horizontal scroll items
+    height: 120, // Fixed height for horizontal scroll items
+    borderRadius: 8, // Match item container
   },
   removeImageButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#fee2e2', // Lighter red
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  removeImageText: {
+  removeImageButtonText: {
+    color: 'white',
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#ef4444', // Red color for remove
+    fontWeight: 'bold',
+    lineHeight: 20, // Adjust for better vertical centering of '✕'
+  },
+  maxImagesText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
   },
   photoButtonsContainer: {
     flexDirection: 'row',

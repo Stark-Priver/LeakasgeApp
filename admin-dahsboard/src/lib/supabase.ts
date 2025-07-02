@@ -15,7 +15,8 @@ export interface WaterReport {
   location_address?: string | null; // For manual text address
   latitude?: number | null; // Optional if manual address is provided
   longitude?: number | null; // Optional if manual address is provided
-  image_url?: string | null; // Standardized and optional
+  image_url?: string | null; // DEPRECATED: Standardized and optional
+  image_urls?: string[] | null; // To store multiple image URLs
   status: 'pending' | 'in_progress' | 'resolved'; // Standardized
   assigned_to?: string;
   created_at: string;
