@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Assuming PostgreSQL. Change if different (e.g., "mysql", "sqlite", "sqlserver", "mongodb")
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  full_name String?
+  role      Role     @default(USER)
+  is_banned Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  reports   WaterReport[]
+
+  @@map("users")
+}
+
+model WaterReport {
+  id               String       @id @default(uuid())
+  user_id          String
+  user             User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  issue_type       IssueType
+  severity         Severity
+  description      String
+  location_address String?
+  latitude         Float?
+  longitude        Float?
+  image_urls       String[]     @default([]) // Array of strings for image URLs
+  status           ReportStatus @default(PENDING)
+  assigned_to      String?      // Could be an ID of a technician or a name
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@map("water_reports")
+}
+
+enum Role {
+  USER
+  ADMIN
+  TECHNICIAN
+}
+
+enum IssueType {
+  LEAKAGE
+  WATER_QUALITY_PROBLEM
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+}

@@ -1,0 +1,19 @@
+{
+  "name": "your-project-name",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prisma:migrate:dev": "npx dotenv-cli -- npx prisma migrate dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0",
+    "prisma": "^6.11.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.0"
+  }
+}
