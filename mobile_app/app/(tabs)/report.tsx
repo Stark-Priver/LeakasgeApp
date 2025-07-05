@@ -22,7 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Camera, MapPin, Image as ImageIcon, Upload, AlertCircle } from 'lucide-react-native';
 
 // API base URL - replace with your actual API URL, possibly from .env
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'https://leakasge-app.vercel.app/api';
 
 // Interface for the data payload to the API
 interface ApiReportPayload {

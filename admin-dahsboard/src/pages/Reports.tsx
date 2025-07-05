@@ -43,7 +43,7 @@ export interface ApiWaterReport {
 }
 
 
-const API_BASE_URL = "http://localhost:3001/api"; // Should be in .env ideally
+const API_BASE_URL = "https://leakasge-app.vercel.app/api"; // Should be in .env ideally
 
 export function Reports() {
   const [reports, setReports] = useState<ApiWaterReport[]>([]);

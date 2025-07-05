@@ -18,7 +18,7 @@ import { supabase } from '../lib/supabase'; // Keep for auth session
 import { ApiWaterReport } from './Reports'; // Import the API report type
 
 // API base URL - should ideally come from .env or a config file
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL = "https://leakasge-app.vercel.app/api";
 
 
 // Leaflet Map Component
