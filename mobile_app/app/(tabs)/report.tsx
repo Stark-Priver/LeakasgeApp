@@ -15,22 +15,40 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase'; // Keep for image uploads for now
 import { useAuth } from '@/hooks/useAuth';
-import { WaterReportInsert } from '@/types/database'; // Updated type
+// WaterReportInsert might not be fully compatible, define specific payload type
+// import { WaterReportInsert } from '@/types/database';
 import { Camera, MapPin, Image as ImageIcon, Upload, AlertCircle } from 'lucide-react-native';
 
-// Standardized issue types and severity levels
+// API base URL - replace with your actual API URL, possibly from .env
+const API_BASE_URL = 'http://localhost:3001/api';
+
+// Interface for the data payload to the API
+interface ApiReportPayload {
+  issue_type: string; // e.g., LEAKAGE
+  severity: string;   // e.g., HIGH
+  description: string;
+  location_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  image_urls?: string[] | null;
+  // user_id is added by the backend using the token
+}
+
+
+// Standardized issue types and severity levels for UI
+// Values will be converted to UPPERCASE for API
 const issueTypes = [
-  { label: 'Leakage', value: 'leakage' },
-  { label: 'Water Quality Problem', value: 'water_quality_problem' },
-  { label: 'Other', value: 'other' },
+  { label: 'Leakage', value: 'leakage' }, // API expects LEAKAGE
+  { label: 'Water Quality Problem', value: 'water_quality_problem' }, // API expects WATER_QUALITY_PROBLEM
+  { label: 'Other', value: 'other' }, // API expects OTHER
 ];
 const severityLevels = [
-  { label: 'Low', value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High', value: 'high' },
-  { label: 'Critical', value: 'critical' },
+  { label: 'Low', value: 'low' }, // API expects LOW
+  { label: 'Medium', value: 'medium' }, // API expects MEDIUM
+  { label: 'High', value: 'high' }, // API expects HIGH
+  { label: 'Critical', value: 'critical' }, // API expects CRITICAL
 ];
 
 export default function Report() {
@@ -198,25 +216,49 @@ export default function Report() {
       // uploadImages function sets uploadError state if any image fails.
     }
 
-    const reportData: WaterReportInsert = {
-      user_id: user.id,
-      issue_type: selectedType as WaterReportInsert['issue_type'],
+    // Prepare data for the API
+    // Ensure selectedType and selectedSeverity are defined before using them
+    if (!selectedType || !selectedSeverity) {
+      Alert.alert('Error', 'Issue Type and Severity must be selected.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const reportData: ApiReportPayload = {
+      issue_type: selectedType.toUpperCase(), // Convert to UPPERCASE
+      severity: selectedSeverity.toUpperCase(), // Convert to UPPERCASE
       description: description.trim(),
-      severity: selectedSeverity as WaterReportInsert['severity'],
-      image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : null,
+      image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined, // API expects array or undefined
       latitude: gpsLocation?.coords.latitude,
       longitude: gpsLocation?.coords.longitude,
-      location_address: manualLocationAddress.trim() || null,
-      // status is usually set by backend/db default to 'pending'
+      location_address: manualLocationAddress.trim() || undefined, // API expects string or undefined
     };
 
     try {
-      const { error } = await supabase
-        .from('water_reports') // Corrected table name
-        .insert([reportData]);
+      // Retrieve session for auth token
+      const session = await supabase.auth.getSession();
+      const token = session?.data.session?.access_token;
 
-      if (error) {
-        throw error;
+      if (!token) {
+        Alert.alert('Error', 'Authentication token not found. Please log in again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(reportData),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        // Use error message from API if available, otherwise default
+        throw new Error(responseData.error || `Server responded with ${response.status}`);
       }
 
       Alert.alert('Success', 'Report submitted successfully!', [

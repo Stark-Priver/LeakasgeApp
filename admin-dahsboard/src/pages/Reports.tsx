@@ -224,7 +224,8 @@ export function Reports() {
         throw new Error("Authentication token not found.");
       }
 
-      const response = await fetch(`${API_BASE_URL}/reports/${reportId}/status`, {
+      // Ensure this points to the general update endpoint, not /status specifically
+      const response = await fetch(`${API_BASE_URL}/reports/${reportId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

@@ -29,6 +29,31 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
+// GET a single water report by ID (protected)
+router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const report = await prisma.waterReport.findUnique({
+      where: { id: String(id) },
+      include: {
+        user: {
+          select: {
+            email: true,
+            full_name: true,
+          }
+        }
+      }
+    });
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    res.json(report);
+  } catch (error) {
+    console.error(`Failed to fetch report ${id}:`, error);
+    res.status(500).json({ error: `Failed to fetch report ${id}` });
+  }
+});
+
 // POST a new water report (protected)
 // This is a basic example. Needs validation and more robust error handling.
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -87,33 +112,43 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 });
 
 
-// PUT update report status (protected)
-router.put('/:id/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// PUT update report details (status, assigned_to) (protected)
+router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, assigned_to } = req.body;
 
-  // Basic validation
-  if (!status || !['PENDING', 'IN_PROGRESS', 'RESOLVED'].includes(status.toUpperCase())) {
+  // Validation for status if provided
+  if (status && !['PENDING', 'IN_PROGRESS', 'RESOLVED'].includes(String(status).toUpperCase())) {
     return res.status(400).json({ error: 'Invalid status provided. Must be PENDING, IN_PROGRESS, or RESOLVED.' });
   }
 
-  const userId = req.user?.id; // User performing the update (for logging or authorization if needed)
+  const userId = req.user?.id; // User performing the update
   if (!userId) {
-    return res.status(403).json({ error: 'User ID not found in token.' });
+    return res.status(403).json({ error: 'User ID not found in token. Update not permitted.' });
   }
 
-  // In a real app, you might want to check if the user has permission to update this report,
-  // e.g., if they are an admin or assigned technician.
+  // In a real app, further check if req.user.role is ADMIN or if the user is assigned.
+  // For now, any authenticated user can update.
+
+  const updateData: { status?: string; assigned_to?: string | null } = {};
+
+  if (status) {
+    updateData.status = String(status).toUpperCase();
+  }
+  if (assigned_to !== undefined) { // Allow setting assigned_to to null or an empty string (which becomes null)
+    updateData.assigned_to = assigned_to ? String(assigned_to) : null;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return res.status(400).json({ error: 'No updateable fields provided (status, assigned_to).' });
+  }
 
   try {
     const updatedReport = await prisma.waterReport.update({
-      where: { id: String(id) }, // Ensure id is treated as string if necessary
-      data: {
-        status: status.toUpperCase(), // Ensure status is in uppercase as per enum
-        // updated_at is handled automatically by @updatedAt directive in Prisma schema
-      },
+      where: { id: String(id) },
+      data: updateData,
       include: {
-        user: {
+        user: { // Include user details (email, full_name)
           select: {
             email: true,
             full_name: true,
@@ -123,11 +158,11 @@ router.put('/:id/status', authenticateToken, async (req: AuthenticatedRequest, r
     });
     res.json(updatedReport);
   } catch (error: any) {
-    console.error(`Failed to update status for report ${id}:`, error);
+    console.error(`Failed to update report ${id}:`, error);
     if (error.code === 'P2025') { // Record to update not found
       return res.status(404).json({ error: 'Report not found.' });
     }
-    res.status(500).json({ error: `Failed to update status for report ${id}` });
+    res.status(500).json({ error: `Failed to update report ${id}` });
   }
 });
 
