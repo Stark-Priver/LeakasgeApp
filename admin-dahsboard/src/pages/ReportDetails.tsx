@@ -13,11 +13,16 @@ import {
   CheckCircle,
   MessageSquare
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { WaterReport } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; // Keep for auth session
+// import type { WaterReport } from '../lib/supabase'; // Will use ApiWaterReport
+import { ApiWaterReport } from './Reports'; // Import the API report type
+
+// API base URL - should ideally come from .env or a config file
+const API_BASE_URL = "http://localhost:3001/api";
+
 
 // Leaflet Map Component
-const LeafletMap = ({ latitude, longitude, address }) => {
+const LeafletMap = ({ latitude, longitude, address }: { latitude?: number | null, longitude?: number | null, address?: string | null }) => {
   const mapRef = React.useRef(null);
   const mapInstanceRef = React.useRef(null);
 
@@ -90,10 +95,12 @@ const LeafletMap = ({ latitude, longitude, address }) => {
 
 export function ReportDetails() {
   const { id } = useParams<{ id: string }>();
-  const [report, setReport] = useState<WaterReport | null>(null);
+  const [report, setReport] = useState<ApiWaterReport | null>(null); // Use ApiWaterReport
   const [loading, setLoading] = useState(true);
-  const [comment, setComment] = useState(''); // Placeholder for future comment feature
-  const [assignedTo, setAssignedTo] = useState(''); // For assignment input
+  // const [comment, setComment] = useState(''); // Placeholder for future comment feature - remove if not used
+  const [currentAssignedTo, setCurrentAssignedTo] = useState(''); // For assignment input field
+  const [currentStatus, setCurrentStatus] = useState<ApiWaterReport['status'] | undefined>(undefined);
+
 
   useEffect(() => {
     if (id) {
@@ -104,92 +111,167 @@ export function ReportDetails() {
   const fetchReportDetails = async (reportId: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('water_reports')
-        .select(`
-          *,
-          user:users(email, full_name)
-        `)
-        .eq('id', reportId)
-        .single();
+      const session = await supabase.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error("Authentication token not found.");
 
-      if (error) throw error;
+      const response = await fetch(`${API_BASE_URL}/reports/${reportId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch report: ${response.statusText}`);
+      }
+      const data: ApiWaterReport = await response.json();
       setReport(data);
-      setAssignedTo(data?.assigned_to || '');
-    } catch (error) {
-      console.error('Error fetching report details:', error);
-      setReport(null); // Ensure report is null on error
+      setCurrentAssignedTo(data.assigned_to || '');
+      setCurrentStatus(data.status);
+    } catch (error: any) {
+      console.error('Error fetching report details:', error.message || error);
+      setReport(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAssignmentOrStatusUpdate = async (newStatus?: WaterReport['status']) => {
-    if (!report) return;
+  const handleSaveChanges = async () => {
+    if (!report || !id) return;
 
-    const statusToUpdate = newStatus || report.status;
+    const payload: { status?: ApiWaterReport['status']; assigned_to?: string | null } = {};
+
+    if (currentStatus && currentStatus !== report.status) {
+      payload.status = currentStatus;
+    }
+    if (currentAssignedTo !== (report.assigned_to || '')) { // Compare with original or empty string
+      payload.assigned_to = currentAssignedTo.trim() || null;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      alert('No changes to save.');
+      return;
+    }
+
+    setLoading(true); // Indicate loading state for save operation
 
     try {
-      const { data: updatedReport, error } = await supabase
-        .from('water_reports')
-        .update({ 
-          status: statusToUpdate,
-          updated_at: new Date().toISOString(),
-          assigned_to: assignedTo.trim() || null // Use trimmed assignedTo or null
-        })
-        .eq('id', report.id)
-        .select(`
-          *,
-          user:users(email, full_name)
-        `)
-        .single();
+      const session = await supabase.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error("Authentication token not found.");
 
-      if (error) throw error;
+      const response = await fetch(`${API_BASE_URL}/reports/${id}`, { // Use PUT /api/reports/:id
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update report: ${response.statusText}`);
+      }
       
-      setReport(updatedReport); // Update report state with the fresh data from DB
-      // Optionally, give user feedback on successful update
+      const updatedReportFromServer: ApiWaterReport = await response.json();
+      setReport(updatedReportFromServer); // Update report state with the fresh data from DB
+      setCurrentAssignedTo(updatedReportFromServer.assigned_to || '');
+      setCurrentStatus(updatedReportFromServer.status);
       alert('Report updated successfully!');
 
-    } catch (error) {
-      console.error('Error updating report:', error);
-      alert('Failed to update report.');
+    } catch (error: any) {
+      console.error('Error updating report:', error.message || error);
+      alert(`Failed to update report: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Quick status update handler, e.g. for "Mark as Resolved" button
+  const handleQuickStatusUpdate = async (newStatus: ApiWaterReport['status']) => {
+    if (!report || !id || newStatus === report.status) return;
+
+    setCurrentStatus(newStatus); // Set current status for UI consistency
+                                 // then immediately call save.
+    setLoading(true);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error("Authentication token not found.");
+
+      const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus, assigned_to: report.assigned_to }), // Send current assigned_to as well
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update report: ${response.statusText}`);
+      }
+
+      const updatedReportFromServer: ApiWaterReport = await response.json();
+      setReport(updatedReportFromServer);
+      setCurrentAssignedTo(updatedReportFromServer.assigned_to || '');
+      setCurrentStatus(updatedReportFromServer.status);
+      // alert(`Report status updated to ${formatText(newStatus)}!`); // Optional: specific feedback
+
+    } catch (error: any) {
+      console.error('Error updating report status:', error.message || error);
+      alert(`Failed to update status: ${error.message || 'Unknown error'}`);
+      setCurrentStatus(report.status); // Revert UI on error
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // formatText needs to handle uppercase enums from API if it's to be used for display
   const formatText = (text: string | null | undefined, defaultText = 'N/A') => {
     if (!text) return defaultText;
-    return text.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    // Example: PENDING -> Pending, WATER_QUALITY_PROBLEM -> Water Quality Problem
+    return text
+      .toLowerCase()
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
 
-  const getSeverityBadgeStyle = (severity?: WaterReport['severity']) => {
+  const getSeverityBadgeStyle = (severity?: ApiWaterReport['severity']) => {
+    // API sends uppercase: CRITICAL, HIGH, MEDIUM, LOW
     switch (severity) {
-      case 'critical': return 'bg-red-100 text-red-700 border-red-300';
-      case 'high': return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'low': return 'bg-green-100 text-green-700 border-green-300';
+      case 'CRITICAL': return 'bg-red-100 text-red-700 border-red-300';
+      case 'HIGH': return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'MEDIUM': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'LOW': return 'bg-green-100 text-green-700 border-green-300';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
 
-  const getStatusBadgeStyle = (status?: WaterReport['status']) => {
+  const getStatusBadgeStyle = (status?: ApiWaterReport['status']) => {
+    // API sends uppercase: RESOLVED, IN_PROGRESS, PENDING
     switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-700 border-green-300';
-      case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'RESOLVED': return 'bg-green-100 text-green-700 border-green-300';
+      case 'IN_PROGRESS': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'PENDING': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
 
-  const getStatusIcon = (status?: WaterReport['status']) => {
+  const getStatusIcon = (status?: ApiWaterReport['status']) => {
+    // API sends uppercase
     switch (status) {
-      case 'resolved': return CheckCircle;
-      case 'in_progress': return Clock;
-      case 'pending': return AlertTriangle;
+      case 'RESOLVED': return CheckCircle;
+      case 'IN_PROGRESS': return Clock;
+      case 'PENDING': return AlertTriangle;
       default: return Clock; // Default icon
     }
   };
 
-  if (loading) {
+  if (loading && !report) { // Show full page loader only on initial load
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -213,7 +295,7 @@ export function ReportDetails() {
     );
   }
 
-  const StatusIcon = getStatusIcon(report.status);
+  const StatusIcon = getStatusIcon(report.status); // This should now use report.status which is uppercase
   const cardClassName = "bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-300";
   const labelClassName = "block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1";
   const valueClassName = "text-sm text-gray-800 bg-gray-50 rounded-md px-3 py-2";
@@ -287,7 +369,7 @@ export function ReportDetails() {
                 </div>
               </div>
 
-              {(report.latitude || report.longitude) && (!report.location_address || (report.location_address && (report.latitude || report.longitude))) && (
+              {(report.latitude && report.longitude) && (!report.location_address || (report.location_address && (report.latitude && report.longitude))) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
                   {report.latitude && (
                     <div>
@@ -307,6 +389,7 @@ export function ReportDetails() {
           </div>
 
           {/* Photo Evidence */}
+          {/* Ensure image_urls is checked (it's optional in ApiWaterReport) */}
           {(report.image_urls && report.image_urls.length > 0) ? (
             <div className={cardClassName}>
               <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
@@ -327,23 +410,7 @@ export function ReportDetails() {
                 ))}
               </div>
             </div>
-          ) : report.image_url ? ( // Fallback for old single image_url
-            <div className={cardClassName}>
-              <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
-                <Camera className="h-5 w-5 mr-2.5 text-gray-600" />
-                Photo Evidence
-              </h2>
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <a href={report.image_url} target="_blank" rel="noopener noreferrer" title="View full image">
-                  <img
-                    src={report.image_url}
-                    alt="Report evidence"
-                    className="w-full h-auto max-h-[400px] object-contain bg-gray-100"
-                  />
-                </a>
-              </div>
-            </div>
-          ) : null}
+          ) : null} {/* Removed old image_url fallback as it's not in ApiWaterReport defined in Reports.tsx */}
 
           {/* Interactive Leaflet Map */}
           {(report.latitude && report.longitude) && (
@@ -388,13 +455,14 @@ export function ReportDetails() {
                     <span className="text-sm font-semibold text-gray-800">System</span>
                   </div>
                   <span className="text-xs text-gray-500">
-                    {new Date(report.created_at).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
+                    {new Date(report.createdAt).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
                   </span>
                 </div>
                 <p className="text-sm text-gray-700">Report created and submitted for review.</p>
               </div>
 
-              {report.updated_at && new Date(report.updated_at).getTime() !== new Date(report.created_at).getTime() && (
+              {/* Display last update information */}
+              {report.updatedAt && new Date(report.updatedAt).getTime() !== new Date(report.createdAt).getTime() && (
                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center space-x-2">
@@ -404,7 +472,7 @@ export function ReportDetails() {
                       <span className="text-sm font-semibold text-gray-800">Admin/System</span>
                     </div>
                     <span className="text-xs text-gray-500">
-                      {new Date(report.updated_at).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
+                      {new Date(report.updatedAt).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700">
@@ -431,6 +499,7 @@ export function ReportDetails() {
               <div className="flex items-center space-x-3">
                 <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center border border-blue-200">
                   <span className="text-lg font-medium text-blue-600">
+                    {/* User details are now directly from report.user */}
                     {report.user?.full_name?.charAt(0).toUpperCase() || report.user?.email?.charAt(0).toUpperCase() || '?'}
                   </span>
                 </div>
@@ -449,7 +518,7 @@ export function ReportDetails() {
               )}
               <div className="flex items-center space-x-2.5 text-sm text-gray-700">
                 <Calendar className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                <span>Reported on: {new Date(report.created_at).toLocaleDateString([], {dateStyle: 'long'})}</span>
+                <span>Reported on: {new Date(report.createdAt).toLocaleDateString([], {dateStyle: 'long'})}</span>
               </div>
             </div>
           </div>
@@ -462,13 +531,14 @@ export function ReportDetails() {
                 <label htmlFor="statusSelect" className={labelClassName}>Update Status</label>
                 <select
                   id="statusSelect"
-                  value={report.status}
-                  onChange={(e) => handleAssignmentOrStatusUpdate(e.target.value as WaterReport['status'])}
+                  value={currentStatus || ''} // Use currentStatus state
+                  onChange={(e) => setCurrentStatus(e.target.value as ApiWaterReport['status'])}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
+                  {/* Ensure option values are uppercase to match ApiWaterReport status type */}
+                  <option value="PENDING">Pending</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="RESOLVED">Resolved</option>
                 </select>
               </div>
 
@@ -477,18 +547,19 @@ export function ReportDetails() {
                 <input
                   id="assignToInput"
                   type="text"
-                  value={assignedTo}
-                  onChange={(e) => setAssignedTo(e.target.value)}
+                  value={currentAssignedTo} // Use currentAssignedTo state
+                  onChange={(e) => setCurrentAssignedTo(e.target.value)}
                   placeholder="Technician name or ID"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
 
               <button
-                onClick={() => handleAssignmentOrStatusUpdate()} // Updates assignment with current status, or just assignment if status not changed via select
-                className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors text-sm font-medium"
+                onClick={handleSaveChanges} // Use the new combined save handler
+                disabled={loading} // Disable button when loading
+                className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors text-sm font-medium disabled:opacity-50"
               >
-                Save Changes
+                {loading && report ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -497,23 +568,28 @@ export function ReportDetails() {
           <div className={cardClassName}>
             <h2 className="text-xl font-semibold text-gray-800 mb-5">Quick Actions</h2>
             <div className="space-y-2.5">
-              {report.status === 'pending' && (
+              {report.status === 'PENDING' && (
                 <button
-                  onClick={() => handleAssignmentOrStatusUpdate('in_progress')}
-                  className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors text-sm font-medium"
+                  onClick={() => handleQuickStatusUpdate('IN_PROGRESS')}
+                  disabled={loading}
+                  className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors text-sm font-medium disabled:opacity-50"
                 >
                   Start Investigation
                 </button>
               )}
-              {report.status === 'in_progress' && (
+              {report.status === 'IN_PROGRESS' && (
                 <button
-                  onClick={() => handleAssignmentOrStatusUpdate('resolved')}
-                  className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm font-medium"
+                  onClick={() => handleQuickStatusUpdate('RESOLVED')}
+                  disabled={loading}
+                  className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm font-medium disabled:opacity-50"
                 >
                   Mark as Resolved
                 </button>
               )}
-               <button className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors text-sm font-medium">
+               <button
+                disabled={true} // Placeholder action
+                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-50"
+               >
                 Log Internal Note (Future)
               </button>
             </div>
