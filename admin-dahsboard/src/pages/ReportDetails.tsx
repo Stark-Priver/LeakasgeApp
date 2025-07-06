@@ -18,7 +18,7 @@ import { supabase } from '../lib/supabase'; // Keep for auth session
 import { ApiWaterReport } from './Reports'; // Import the API report type
 
 // API base URL - should ideally come from .env or a config file
-const API_BASE_URL = "https://leakasge-app.vercel.app/api";
+const API_BASE_URL = "http://192.168.8.126:3001/api";
 
 
 // Leaflet Map Component
@@ -316,14 +316,24 @@ export function ReportDetails() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Report Details</h1>
-            <p className="text-gray-500 text-sm">ID: <span className="font-mono">{report.id}</span></p>
+            <p className="text-gray-500 text-sm">
+              ID: <span className="font-mono">{report.id}</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center space-x-3 flex-shrink-0">
-          <span className={`inline-flex items-center px-3.5 py-1.5 text-sm font-semibold rounded-full border ${getSeverityBadgeStyle(report.severity)} capitalize`}>
+          <span
+            className={`inline-flex items-center px-3.5 py-1.5 text-sm font-semibold rounded-full border ${getSeverityBadgeStyle(
+              report.severity
+            )} capitalize`}
+          >
             {formatText(report.severity)}
           </span>
-          <span className={`inline-flex items-center px-3.5 py-1.5 text-sm font-semibold rounded-full border ${getStatusBadgeStyle(report.status)}`}>
+          <span
+            className={`inline-flex items-center px-3.5 py-1.5 text-sm font-semibold rounded-full border ${getStatusBadgeStyle(
+              report.status
+            )}`}
+          >
             <StatusIcon className="h-4 w-4 mr-1.5" />
             {formatText(report.status)}
           </span>
@@ -335,18 +345,28 @@ export function ReportDetails() {
         <div className="lg:col-span-2 space-y-8">
           {/* Report Information */}
           <div className={cardClassName}>
-            <h2 className="text-xl font-semibold text-gray-800 mb-5">Issue Details</h2>
-            
+            <h2 className="text-xl font-semibold text-gray-800 mb-5">
+              Issue Details
+            </h2>
+
             <div className="space-y-5">
               <div>
                 <label className={labelClassName}>Issue Type</label>
-                <p className={valueLargeClassName}>{formatText(report.issue_type)}</p>
+                <p className={valueLargeClassName}>
+                  {formatText(report.issue_type)}
+                </p>
               </div>
 
               <div>
                 <label className={labelClassName}>Description</label>
-                <p className={`${valueLargeClassName} whitespace-pre-wrap min-h-[60px]`}>
-                  {report.description || <span className="italic text-gray-500">No description provided.</span>}
+                <p
+                  className={`${valueLargeClassName} whitespace-pre-wrap min-h-[60px]`}
+                >
+                  {report.description || (
+                    <span className="italic text-gray-500">
+                      No description provided.
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -358,39 +378,52 @@ export function ReportDetails() {
                       <MapPin className="h-4 w-4 text-gray-500 mr-2 flex-shrink-0" />
                       <span>{report.location_address}</span>
                     </div>
-                  ) : (report.latitude && report.longitude) ? (
-                     <div className="flex items-center">
-                       <MapPin className="h-4 w-4 text-gray-500 mr-2 flex-shrink-0" />
-                       <span>Lat: {report.latitude.toFixed(5)}, Lon: {report.longitude.toFixed(5)}</span>
-                     </div>
+                  ) : report.latitude && report.longitude ? (
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 text-gray-500 mr-2 flex-shrink-0" />
+                      <span>
+                        Lat: {report.latitude.toFixed(5)}, Lon:{" "}
+                        {report.longitude.toFixed(5)}
+                      </span>
+                    </div>
                   ) : (
-                    <p className="italic text-gray-500">No specific location provided.</p>
+                    <p className="italic text-gray-500">
+                      No specific location provided.
+                    </p>
                   )}
                 </div>
               </div>
 
-              {(report.latitude && report.longitude) && (!report.location_address || (report.location_address && (report.latitude && report.longitude))) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
-                  {report.latitude && (
-                    <div>
-                      <label className={labelClassName}>Latitude</label>
-                      <p className={valueClassName}>{report.latitude.toFixed(5)}</p>
-                    </div>
-                  )}
-                  {report.longitude && (
-                    <div>
-                      <label className={labelClassName}>Longitude</label>
-                      <p className={valueClassName}>{report.longitude.toFixed(5)}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              {report.latitude &&
+                report.longitude &&
+                (!report.location_address ||
+                  (report.location_address &&
+                    report.latitude &&
+                    report.longitude)) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+                    {report.latitude && (
+                      <div>
+                        <label className={labelClassName}>Latitude</label>
+                        <p className={valueClassName}>
+                          {report.latitude.toFixed(5)}
+                        </p>
+                      </div>
+                    )}
+                    {report.longitude && (
+                      <div>
+                        <label className={labelClassName}>Longitude</label>
+                        <p className={valueClassName}>
+                          {report.longitude.toFixed(5)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           </div>
-
           {/* Photo Evidence */}
           {/* Ensure image_urls is checked (it's optional in ApiWaterReport) */}
-          {(report.image_urls && report.image_urls.length > 0) ? (
+          {report.image_urls && report.image_urls.length > 0 ? (
             <div className={cardClassName}>
               <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
                 <Camera className="h-5 w-5 mr-2.5 text-gray-600" />
@@ -398,8 +431,16 @@ export function ReportDetails() {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {report.image_urls.map((url, index) => (
-                  <div key={index} className="rounded-lg overflow-hidden border border-gray-200 aspect-w-1 aspect-h-1">
-                    <a href={url} target="_blank" rel="noopener noreferrer" title={`View full image ${index + 1}`}>
+                  <div
+                    key={index}
+                    className="rounded-lg overflow-hidden border border-gray-200 aspect-w-1 aspect-h-1"
+                  >
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`View full image ${index + 1}`}
+                    >
                       <img
                         src={url}
                         alt={`Report evidence ${index + 1}`}
@@ -410,23 +451,26 @@ export function ReportDetails() {
                 ))}
               </div>
             </div>
-          ) : null} {/* Removed old image_url fallback as it's not in ApiWaterReport defined in Reports.tsx */}
-
+          ) : null}{" "}
+          {/* Removed old image_url fallback as it's not in ApiWaterReport defined in Reports.tsx */}
           {/* Interactive Leaflet Map */}
-          {(report.latitude && report.longitude) && (
+          {report.latitude && report.longitude && (
             <div className={cardClassName}>
               <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
                 <MapPin className="h-5 w-5 mr-2.5 text-gray-600" />
                 Location Map
               </h2>
-              <LeafletMap 
-                latitude={report.latitude} 
+              <LeafletMap
+                latitude={report.latitude}
                 longitude={report.longitude}
                 address={report.location_address}
               />
               <div className="mt-3 text-sm text-gray-600 flex items-center justify-between">
-                <span>Coordinates: {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</span>
-                <a 
+                <span>
+                  Coordinates: {report.latitude.toFixed(5)},{" "}
+                  {report.longitude.toFixed(5)}
+                </span>
+                <a
                   href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -437,7 +481,6 @@ export function ReportDetails() {
               </div>
             </div>
           )}
-
           {/* Comments Section (Placeholder) */}
           <div className={cardClassName}>
             <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
@@ -452,37 +495,55 @@ export function ReportDetails() {
                     <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-600">
                       SYS
                     </div>
-                    <span className="text-sm font-semibold text-gray-800">System</span>
+                    <span className="text-sm font-semibold text-gray-800">
+                      System
+                    </span>
                   </div>
                   <span className="text-xs text-gray-500">
-                    {new Date(report.createdAt).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
+                    {new Date(report.createdAt).toLocaleString([], {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
                   </span>
                 </div>
-                <p className="text-sm text-gray-700">Report created and submitted for review.</p>
+                <p className="text-sm text-gray-700">
+                  Report created and submitted for review.
+                </p>
               </div>
 
               {/* Display last update information */}
-              {report.updatedAt && new Date(report.updatedAt).getTime() !== new Date(report.createdAt).getTime() && (
-                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center space-x-2">
-                       <div className="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center text-xs font-medium text-green-600">
-                        ADM
+              {report.updatedAt &&
+                new Date(report.updatedAt).getTime() !==
+                  new Date(report.createdAt).getTime() && (
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center text-xs font-medium text-green-600">
+                          ADM
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800">
+                          Admin/System
+                        </span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-800">Admin/System</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(report.updatedAt).toLocaleString([], {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {new Date(report.updatedAt).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
-                    </span>
+                    <p className="text-sm text-gray-700">
+                      Report details last updated. Status:{" "}
+                      {formatText(report.status)}. Assigned to:{" "}
+                      {formatText(report.assigned_to, "Unassigned")}.
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-700">
-                    Report details last updated. Status: {formatText(report.status)}. Assigned to: {formatText(report.assigned_to, 'Unassigned')}.
-                  </p>
-                </div>
-              )}
+                )}
               {/* Comment input - future enhancement */}
               {/* <div className="border-t pt-4 mt-4"> ... </div> */}
-               <p className="text-sm text-gray-500 italic text-center pt-2">Comment history and input form can be added here.</p>
+              <p className="text-sm text-gray-500 italic text-center pt-2">
+                Comment history and input form can be added here.
+              </p>
             </div>
           </div>
         </div>
@@ -500,12 +561,15 @@ export function ReportDetails() {
                 <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center border border-blue-200">
                   <span className="text-lg font-medium text-blue-600">
                     {/* User details are now directly from report.user */}
-                    {report.user?.full_name?.charAt(0).toUpperCase() || report.user?.email?.charAt(0).toUpperCase() || '?'}
+                    {report.user?.full_name?.charAt(0).toUpperCase() ||
+                      report.user?.email?.charAt(0).toUpperCase() ||
+                      "?"}
                   </span>
                 </div>
                 <div>
                   <p className="text-base font-semibold text-gray-800">
-                    {report.user?.full_name || formatText(report.user?.email, 'Anonymous User')}
+                    {report.user?.full_name ||
+                      formatText(report.user?.email, "Anonymous User")}
                   </p>
                   <p className="text-xs text-gray-500">Reporter</p>
                 </div>
@@ -513,26 +577,43 @@ export function ReportDetails() {
               {report.user?.email && (
                 <div className="flex items-center space-x-2.5 text-sm text-gray-700 pt-1">
                   <Mail className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                  <a href={`mailto:${report.user.email}`} className="hover:underline truncate" title={report.user.email}>{report.user.email}</a>
+                  <a
+                    href={`mailto:${report.user.email}`}
+                    className="hover:underline truncate"
+                    title={report.user.email}
+                  >
+                    {report.user.email}
+                  </a>
                 </div>
               )}
               <div className="flex items-center space-x-2.5 text-sm text-gray-700">
                 <Calendar className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                <span>Reported on: {new Date(report.createdAt).toLocaleDateString([], {dateStyle: 'long'})}</span>
+                <span>
+                  Reported on:{" "}
+                  {new Date(report.createdAt).toLocaleDateString([], {
+                    dateStyle: "long",
+                  })}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Status Management */}
           <div className={cardClassName}>
-            <h2 className="text-xl font-semibold text-gray-800 mb-5">Manage Report</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-5">
+              Manage Report
+            </h2>
             <div className="space-y-5">
               <div>
-                <label htmlFor="statusSelect" className={labelClassName}>Update Status</label>
+                <label htmlFor="statusSelect" className={labelClassName}>
+                  Update Status
+                </label>
                 <select
                   id="statusSelect"
-                  value={currentStatus || ''} // Use currentStatus state
-                  onChange={(e) => setCurrentStatus(e.target.value as ApiWaterReport['status'])}
+                  value={currentStatus || ""} // Use currentStatus state
+                  onChange={(e) =>
+                    setCurrentStatus(e.target.value as ApiWaterReport["status"])
+                  }
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
                 >
                   {/* Ensure option values are uppercase to match ApiWaterReport status type */}
@@ -543,7 +624,9 @@ export function ReportDetails() {
               </div>
 
               <div>
-                <label htmlFor="assignToInput" className={labelClassName}>Assign To</label>
+                <label htmlFor="assignToInput" className={labelClassName}>
+                  Assign To
+                </label>
                 <input
                   id="assignToInput"
                   type="text"
@@ -559,38 +642,41 @@ export function ReportDetails() {
                 disabled={loading} // Disable button when loading
                 className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors text-sm font-medium disabled:opacity-50"
               >
-                {loading && report ? 'Saving...' : 'Save Changes'}
+                {loading && report ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
 
           {/* Quick Actions - simplified */}
           <div className={cardClassName}>
-            <h2 className="text-xl font-semibold text-gray-800 mb-5">Quick Actions</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-5">
+              Quick Actions
+            </h2>
             <div className="space-y-2.5">
-              {report.status === 'PENDING' && (
+              {report.status === "PENDING" && (
                 <button
-                  onClick={() => handleQuickStatusUpdate('IN_PROGRESS')}
+                  onClick={() => handleQuickStatusUpdate("IN_PROGRESS")}
                   disabled={loading}
                   className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors text-sm font-medium disabled:opacity-50"
                 >
                   Start Investigation
                 </button>
               )}
-              {report.status === 'IN_PROGRESS' && (
+              {report.status === "IN_PROGRESS" && (
                 <button
-                  onClick={() => handleQuickStatusUpdate('RESOLVED')}
+                  onClick={() => handleQuickStatusUpdate("RESOLVED")}
                   disabled={loading}
                   className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm font-medium disabled:opacity-50"
                 >
                   Mark as Resolved
                 </button>
               )}
-               <button
-                disabled={true} // Placeholder action
-                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-50"
-               >
-                Log Internal Note (Future)
+              <button
+                onClick={() => handleBanUser(report.user?.id)}
+                disabled={loading}
+                className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                Ban User {report.user?.email}
               </button>
             </div>
           </div>

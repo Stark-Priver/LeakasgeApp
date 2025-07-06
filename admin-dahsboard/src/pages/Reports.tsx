@@ -22,18 +22,19 @@ import { useAuth } from "../contexts/AuthContext"; // To get user session/token 
 export interface ApiWaterReport {
   id: string;
   user_id: string;
-  issue_type: 'LEAKAGE' | 'WATER_QUALITY_PROBLEM' | 'OTHER'; // Note: Enums from Prisma are uppercase
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; // Note: Enums from Prisma are uppercase
+  issue_type: "LEAKAGE" | "WATER_QUALITY_PROBLEM" | "OTHER"; // Note: Enums from Prisma are uppercase
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; // Note: Enums from Prisma are uppercase
   description: string;
   location_address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   image_urls?: string[] | null;
-  status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED'; // Note: Enums from Prisma are uppercase
+  status: "PENDING" | "IN_PROGRESS" | "RESOLVED"; // Note: Enums from Prisma are uppercase
   assigned_to?: string;
   createdAt: string; // Prisma uses ISO string
   updatedAt: string; // Prisma uses ISO string
-  user?: { // User object structure from API
+  user?: {
+    // User object structure from API
     email: string;
     full_name?: string | null;
     // is_banned is not directly in the API response for reports, but might be in a /users API
@@ -42,8 +43,7 @@ export interface ApiWaterReport {
   // For now, assuming 'location' was derived or an alias.
 }
 
-
-const API_BASE_URL = "https://leakasge-app.vercel.app/api"; // Should be in .env ideally
+const API_BASE_URL = "http://192.168.8.126:3001/api"; // Should be in .env ideally
 
 export function Reports() {
   const [reports, setReports] = useState<ApiWaterReport[]>([]);
@@ -77,7 +77,7 @@ export function Reports() {
   const fetchReports = async () => {
     const isRefresh = !loading;
     if (isRefresh) setRefreshing(true);
-    
+
     try {
       const session = await supabase.auth.getSession();
       const token = session?.data.session?.access_token;
@@ -94,18 +94,23 @@ export function Reports() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch reports: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to fetch reports: ${response.statusText}`
+        );
       }
 
       const data: ApiWaterReport[] = await response.json();
-      
+
       // Process reports to extract location from coordinates if needed (client-side geocoding)
       // Note: Prisma enums are uppercase, Supabase might have been lowercase. Adjust UI if needed.
       const processedReports = await Promise.all(
         (data || []).map(async (report) => {
           if (!report.location_address && report.latitude && report.longitude) {
             try {
-              const address = await reverseGeocode(report.latitude, report.longitude);
+              const address = await reverseGeocode(
+                report.latitude,
+                report.longitude
+              );
               return { ...report, location_address: address };
             } catch (error) {
               console.warn("Failed to reverse geocode:", error);
@@ -115,7 +120,7 @@ export function Reports() {
           return report;
         })
       );
-      
+
       setReports(processedReports);
     } catch (error: any) {
       console.error("Error fetching reports:", error.message || error);
@@ -132,7 +137,7 @@ export function Reports() {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
-      if (!response.ok) throw new Error('Geocoding failed');
+      if (!response.ok) throw new Error("Geocoding failed");
       const data = await response.json();
       return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     } catch (error) {
@@ -150,9 +155,13 @@ export function Reports() {
       filtered = filtered.filter(
         (report) =>
           report.description.toLowerCase().includes(lowerSearchTerm) ||
-          (report.location_address || "").toLowerCase().includes(lowerSearchTerm) ||
+          (report.location_address || "")
+            .toLowerCase()
+            .includes(lowerSearchTerm) ||
           (report.user?.email || "").toLowerCase().includes(lowerSearchTerm) ||
-          (report.user?.full_name || "").toLowerCase().includes(lowerSearchTerm) ||
+          (report.user?.full_name || "")
+            .toLowerCase()
+            .includes(lowerSearchTerm) ||
           report.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
@@ -163,7 +172,9 @@ export function Reports() {
       filtered = filtered.filter((report) => report.status === statusFilter);
     }
     if (severityFilter !== "all") {
-      filtered = filtered.filter((report) => report.severity === severityFilter);
+      filtered = filtered.filter(
+        (report) => report.severity === severityFilter
+      );
     }
     if (typeFilter !== "all") {
       filtered = filtered.filter((report) => report.issue_type === typeFilter);
@@ -179,22 +190,24 @@ export function Reports() {
           bValue = new Date(b.createdAt).getTime();
           break;
         case "severity": // Severity values in ApiWaterReport are 'LOW', 'MEDIUM', etc.
-          const severityOrder: { [key in ApiWaterReport["severity"]]: number } = {
-            LOW: 1,
-            MEDIUM: 2,
-            HIGH: 3,
-            CRITICAL: 4,
-          };
+          const severityOrder: { [key in ApiWaterReport["severity"]]: number } =
+            {
+              LOW: 1,
+              MEDIUM: 2,
+              HIGH: 3,
+              CRITICAL: 4,
+            };
           aValue = severityOrder[a.severity] || 0;
           bValue = severityOrder[b.severity] || 0;
           break;
         default:
-           // Check if sortBy is a valid key of ApiWaterReport
+          // Check if sortBy is a valid key of ApiWaterReport
           if (sortBy in a && sortBy in b) {
             aValue = (a as any)[sortBy];
             bValue = (b as any)[sortBy];
           } else {
-            aValue = 0; bValue = 0; // Default or handle error
+            aValue = 0;
+            bValue = 0; // Default or handle error
           }
       }
 
@@ -236,7 +249,10 @@ export function Reports() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to update report status: ${response.statusText}`);
+        throw new Error(
+          errorData.error ||
+            `Failed to update report status: ${response.statusText}`
+        );
       }
 
       const updatedReportFromServer: ApiWaterReport = await response.json();
@@ -253,7 +269,6 @@ export function Reports() {
           report.id === reportId ? updatedReportFromServer : report
         )
       );
-
     } catch (error: any) {
       console.error("Error updating report status:", error.message || error);
       // Optionally, show an error to the user (e.g., using a toast notification)
@@ -265,50 +280,56 @@ export function Reports() {
     setExporting(true);
     try {
       // Prepare data for CSV using ApiWaterReport structure
-      const csvData = filteredReports.map(report => ({
-        'Report ID': report.id,
-        'Issue Type': formatText(report.issue_type), // formatText needs to handle uppercase enums
-        'Description': report.description,
-        'Location': report.location_address || 'N/A', // No 'location' field in ApiWaterReport
-        'Coordinates': report.latitude && report.longitude 
-          ? `${report.latitude}, ${report.longitude}` 
-          : 'N/A',
-        'Severity': formatText(report.severity), // formatText needs to handle uppercase enums
-        'Status': formatText(report.status),     // formatText needs to handle uppercase enums
-        'Reported By': report.user?.full_name || report.user?.email || 'Anonymous',
-        'Created Date': new Date(report.createdAt).toLocaleDateString(), // Use createdAt
-        'Updated Date': new Date(report.updatedAt).toLocaleDateString(), // Use updatedAt
+      const csvData = filteredReports.map((report) => ({
+        "Report ID": report.id,
+        "Issue Type": formatText(report.issue_type), // formatText needs to handle uppercase enums
+        Description: report.description,
+        Location: report.location_address || "N/A", // No 'location' field in ApiWaterReport
+        Coordinates:
+          report.latitude && report.longitude
+            ? `${report.latitude}, ${report.longitude}`
+            : "N/A",
+        Severity: formatText(report.severity), // formatText needs to handle uppercase enums
+        Status: formatText(report.status), // formatText needs to handle uppercase enums
+        "Reported By":
+          report.user?.full_name || report.user?.email || "Anonymous",
+        "Created Date": new Date(report.createdAt).toLocaleDateString(), // Use createdAt
+        "Updated Date": new Date(report.updatedAt).toLocaleDateString(), // Use updatedAt
       }));
 
       // Convert to CSV string (logic remains the same)
       const headers = Object.keys(csvData[0] || {});
       const csvContent = [
-        headers.join(','),
-        ...csvData.map(row => 
-          headers.map(header => {
-            const value = row[header] || '';
-            // Escape quotes and wrap in quotes if contains comma, quote, or newline
-            return /[",\n]/.test(value) 
-              ? `"${value.replace(/"/g, '""')}"` 
-              : value;
-          }).join(',')
-        )
-      ].join('\n');
+        headers.join(","),
+        ...csvData.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header] || "";
+              // Escape quotes and wrap in quotes if contains comma, quote, or newline
+              return /[",\n]/.test(value)
+                ? `"${value.replace(/"/g, '""')}"`
+                : value;
+            })
+            .join(",")
+        ),
+      ].join("\n");
 
       // Download CSV
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `water_reports_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `water_reports_${new Date().toISOString().split("T")[0]}.csv`
+      );
+      link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
     } catch (error) {
-      console.error('Error exporting CSV:', error);
+      console.error("Error exporting CSV:", error);
       // You might want to show an error notification here
     } finally {
       setExporting(false);
@@ -397,16 +418,20 @@ export function Reports() {
             disabled={refreshing}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
-          <button 
+          <button
             onClick={exportToCSV}
             disabled={exporting || filteredReports.length === 0}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
-            {exporting ? 'Exporting...' : 'Export CSV'}
+            <Download
+              className={`h-4 w-4 mr-2 ${exporting ? "animate-spin" : ""}`}
+            />
+            {exporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
       </div>
@@ -553,7 +578,10 @@ export function Reports() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center text-sm text-gray-900">
                       <MapPin className="h-4 w-4 text-gray-400 mr-1 flex-shrink-0" />
-                      <span className="max-w-xs truncate" title={getDisplayLocation(report)}>
+                      <span
+                        className="max-w-xs truncate"
+                        title={getDisplayLocation(report)}
+                      >
                         {getDisplayLocation(report)}
                       </span>
                     </div>
@@ -571,12 +599,26 @@ export function Reports() {
                     <div className="flex items-center">
                       <User className="h-4 w-4 text-gray-400 mr-1.5 flex-shrink-0" />
                       <div>
-                        <div className="text-sm font-medium text-gray-900" title={report.user?.full_name || report.user?.email || 'Anonymous'}>
-                          {report.user?.full_name || report.user?.email || 'Anonymous'}
-                          {report.user?.is_banned && <span className="text-red-500 ml-1">(Banned)</span>}
+                        <div
+                          className="text-sm font-medium text-gray-900"
+                          title={
+                            report.user?.full_name ||
+                            report.user?.email ||
+                            "Anonymous"
+                          }
+                        >
+                          {report.user?.full_name ||
+                            report.user?.email ||
+                            "Anonymous"}
+                          {report.user?.is_banned && (
+                            <span className="text-red-500 ml-1">(Banned)</span>
+                          )}
                         </div>
                         {report.user?.full_name && report.user?.email && (
-                          <div className="text-xs text-gray-500" title={report.user.email}>
+                          <div
+                            className="text-xs text-gray-500"
+                            title={report.user.email}
+                          >
                             {report.user.email}
                           </div>
                         )}
@@ -587,7 +629,10 @@ export function Reports() {
                     <select
                       value={report.status} // This will be 'PENDING', 'IN_PROGRESS', etc.
                       onChange={(e) =>
-                        updateReportStatus(report.id, e.target.value as ApiWaterReport["status"])
+                        updateReportStatus(
+                          report.id,
+                          e.target.value as ApiWaterReport["status"]
+                        )
                       }
                       className={`text-xs font-medium rounded-lg border px-3 py-1.5 focus:outline-none focus:ring-2 appearance-none ${getStatusSelectStyle(
                         report.status
