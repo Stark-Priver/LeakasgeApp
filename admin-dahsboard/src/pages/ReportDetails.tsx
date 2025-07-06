@@ -1,37 +1,45 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  MapPin, 
-  Calendar, 
-  User, 
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  MapPin,
+  Calendar,
+  User,
   Camera,
   Phone,
   Mail,
   Clock,
   AlertTriangle,
   CheckCircle,
-  MessageSquare
-} from 'lucide-react';
-import { supabase } from '../lib/supabase'; // Keep for auth session
+  MessageSquare,
+} from "lucide-react";
+import { supabase } from "../lib/supabase"; // Keep for auth session
 // import type { WaterReport } from '../lib/supabase'; // Will use ApiWaterReport
-import { ApiWaterReport } from './Reports'; // Import the API report type
+import { ApiWaterReport } from "./Reports"; // Import the API report type
 
 // API base URL - should ideally come from .env or a config file
-const API_BASE_URL = "http://192.168.8.126:3001/api";
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Leaflet Map Component
-const LeafletMap = ({ latitude, longitude, address }: { latitude?: number | null, longitude?: number | null, address?: string | null }) => {
+const LeafletMap = ({
+  latitude,
+  longitude,
+  address,
+}: {
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
+}) => {
   const mapRef = React.useRef(null);
   const mapInstanceRef = React.useRef(null);
 
   useEffect(() => {
     // Load Leaflet CSS and JS
     if (!document.querySelector('link[href*="leaflet"]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href =
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
       document.head.appendChild(link);
     }
 
@@ -41,8 +49,9 @@ const LeafletMap = ({ latitude, longitude, address }: { latitude?: number | null
         return;
       }
 
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+      const script = document.createElement("script");
+      script.src =
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
       script.onload = initializeMap;
       document.head.appendChild(script);
     };
@@ -51,19 +60,25 @@ const LeafletMap = ({ latitude, longitude, address }: { latitude?: number | null
       if (!mapRef.current || !window.L || mapInstanceRef.current) return;
 
       // Initialize map
-      const map = window.L.map(mapRef.current).setView([latitude, longitude], 15);
+      const map = window.L.map(mapRef.current).setView(
+        [latitude, longitude],
+        15
+      );
       mapInstanceRef.current = map;
 
       // Add tile layer
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
 
       // Add marker
       const marker = window.L.marker([latitude, longitude]).addTo(map);
-      
+
       // Add popup with address or coordinates
-      const popupContent = address || `Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      const popupContent =
+        address ||
+        `Coordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
       marker.bindPopup(popupContent).openPopup();
     };
 
@@ -85,10 +100,10 @@ const LeafletMap = ({ latitude, longitude, address }: { latitude?: number | null
   }
 
   return (
-    <div 
-      ref={mapRef} 
+    <div
+      ref={mapRef}
       className="h-72 w-full rounded-lg border border-gray-200"
-      style={{ minHeight: '288px' }}
+      style={{ minHeight: "288px" }}
     />
   );
 };
@@ -98,9 +113,10 @@ export function ReportDetails() {
   const [report, setReport] = useState<ApiWaterReport | null>(null); // Use ApiWaterReport
   const [loading, setLoading] = useState(true);
   // const [comment, setComment] = useState(''); // Placeholder for future comment feature - remove if not used
-  const [currentAssignedTo, setCurrentAssignedTo] = useState(''); // For assignment input field
-  const [currentStatus, setCurrentStatus] = useState<ApiWaterReport['status'] | undefined>(undefined);
-
+  const [currentAssignedTo, setCurrentAssignedTo] = useState(""); // For assignment input field
+  const [currentStatus, setCurrentStatus] = useState<
+    ApiWaterReport["status"] | undefined
+  >(undefined);
 
   useEffect(() => {
     if (id) {
@@ -120,14 +136,16 @@ export function ReportDetails() {
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch report: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to fetch report: ${response.statusText}`
+        );
       }
       const data: ApiWaterReport = await response.json();
       setReport(data);
-      setCurrentAssignedTo(data.assigned_to || '');
+      setCurrentAssignedTo(data.assigned_to || "");
       setCurrentStatus(data.status);
     } catch (error: any) {
-      console.error('Error fetching report details:', error.message || error);
+      console.error("Error fetching report details:", error.message || error);
       setReport(null);
     } finally {
       setLoading(false);
@@ -137,17 +155,21 @@ export function ReportDetails() {
   const handleSaveChanges = async () => {
     if (!report || !id) return;
 
-    const payload: { status?: ApiWaterReport['status']; assigned_to?: string | null } = {};
+    const payload: {
+      status?: ApiWaterReport["status"];
+      assigned_to?: string | null;
+    } = {};
 
     if (currentStatus && currentStatus !== report.status) {
       payload.status = currentStatus;
     }
-    if (currentAssignedTo !== (report.assigned_to || '')) { // Compare with original or empty string
+    if (currentAssignedTo !== (report.assigned_to || "")) {
+      // Compare with original or empty string
       payload.assigned_to = currentAssignedTo.trim() || null;
     }
 
     if (Object.keys(payload).length === 0) {
-      alert('No changes to save.');
+      alert("No changes to save.");
       return;
     }
 
@@ -158,10 +180,11 @@ export function ReportDetails() {
       const token = session?.data.session?.access_token;
       if (!token) throw new Error("Authentication token not found.");
 
-      const response = await fetch(`${API_BASE_URL}/reports/${id}`, { // Use PUT /api/reports/:id
-        method: 'PUT',
+      const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
+        // Use PUT /api/reports/:id
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
@@ -169,29 +192,32 @@ export function ReportDetails() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to update report: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to update report: ${response.statusText}`
+        );
       }
-      
+
       const updatedReportFromServer: ApiWaterReport = await response.json();
       setReport(updatedReportFromServer); // Update report state with the fresh data from DB
-      setCurrentAssignedTo(updatedReportFromServer.assigned_to || '');
+      setCurrentAssignedTo(updatedReportFromServer.assigned_to || "");
       setCurrentStatus(updatedReportFromServer.status);
-      alert('Report updated successfully!');
-
+      alert("Report updated successfully!");
     } catch (error: any) {
-      console.error('Error updating report:', error.message || error);
-      alert(`Failed to update report: ${error.message || 'Unknown error'}`);
+      console.error("Error updating report:", error.message || error);
+      alert(`Failed to update report: ${error.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
   };
 
   // Quick status update handler, e.g. for "Mark as Resolved" button
-  const handleQuickStatusUpdate = async (newStatus: ApiWaterReport['status']) => {
+  const handleQuickStatusUpdate = async (
+    newStatus: ApiWaterReport["status"]
+  ) => {
     if (!report || !id || newStatus === report.status) return;
 
     setCurrentStatus(newStatus); // Set current status for UI consistency
-                                 // then immediately call save.
+    // then immediately call save.
     setLoading(true);
 
     try {
@@ -200,78 +226,95 @@ export function ReportDetails() {
       if (!token) throw new Error("Authentication token not found.");
 
       const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus, assigned_to: report.assigned_to }), // Send current assigned_to as well
+        body: JSON.stringify({
+          status: newStatus,
+          assigned_to: report.assigned_to,
+        }), // Send current assigned_to as well
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to update report: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to update report: ${response.statusText}`
+        );
       }
 
       const updatedReportFromServer: ApiWaterReport = await response.json();
       setReport(updatedReportFromServer);
-      setCurrentAssignedTo(updatedReportFromServer.assigned_to || '');
+      setCurrentAssignedTo(updatedReportFromServer.assigned_to || "");
       setCurrentStatus(updatedReportFromServer.status);
       // alert(`Report status updated to ${formatText(newStatus)}!`); // Optional: specific feedback
-
     } catch (error: any) {
-      console.error('Error updating report status:', error.message || error);
-      alert(`Failed to update status: ${error.message || 'Unknown error'}`);
+      console.error("Error updating report status:", error.message || error);
+      alert(`Failed to update status: ${error.message || "Unknown error"}`);
       setCurrentStatus(report.status); // Revert UI on error
     } finally {
       setLoading(false);
     }
   };
 
-
   // formatText needs to handle uppercase enums from API if it's to be used for display
-  const formatText = (text: string | null | undefined, defaultText = 'N/A') => {
+  const formatText = (text: string | null | undefined, defaultText = "N/A") => {
     if (!text) return defaultText;
     // Example: PENDING -> Pending, WATER_QUALITY_PROBLEM -> Water Quality Problem
     return text
       .toLowerCase()
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
   };
 
-  const getSeverityBadgeStyle = (severity?: ApiWaterReport['severity']) => {
+  const getSeverityBadgeStyle = (severity?: ApiWaterReport["severity"]) => {
     // API sends uppercase: CRITICAL, HIGH, MEDIUM, LOW
     switch (severity) {
-      case 'CRITICAL': return 'bg-red-100 text-red-700 border-red-300';
-      case 'HIGH': return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'LOW': return 'bg-green-100 text-green-700 border-green-300';
-      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+      case "CRITICAL":
+        return "bg-red-100 text-red-700 border-red-300";
+      case "HIGH":
+        return "bg-orange-100 text-orange-700 border-orange-300";
+      case "MEDIUM":
+        return "bg-yellow-100 text-yellow-700 border-yellow-300";
+      case "LOW":
+        return "bg-green-100 text-green-700 border-green-300";
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-300";
     }
   };
 
-  const getStatusBadgeStyle = (status?: ApiWaterReport['status']) => {
+  const getStatusBadgeStyle = (status?: ApiWaterReport["status"]) => {
     // API sends uppercase: RESOLVED, IN_PROGRESS, PENDING
     switch (status) {
-      case 'RESOLVED': return 'bg-green-100 text-green-700 border-green-300';
-      case 'IN_PROGRESS': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'PENDING': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+      case "RESOLVED":
+        return "bg-green-100 text-green-700 border-green-300";
+      case "IN_PROGRESS":
+        return "bg-blue-100 text-blue-700 border-blue-300";
+      case "PENDING":
+        return "bg-yellow-100 text-yellow-700 border-yellow-300";
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-300";
     }
   };
 
-  const getStatusIcon = (status?: ApiWaterReport['status']) => {
+  const getStatusIcon = (status?: ApiWaterReport["status"]) => {
     // API sends uppercase
     switch (status) {
-      case 'RESOLVED': return CheckCircle;
-      case 'IN_PROGRESS': return Clock;
-      case 'PENDING': return AlertTriangle;
-      default: return Clock; // Default icon
+      case "RESOLVED":
+        return CheckCircle;
+      case "IN_PROGRESS":
+        return Clock;
+      case "PENDING":
+        return AlertTriangle;
+      default:
+        return Clock; // Default icon
     }
   };
 
-  if (loading && !report) { // Show full page loader only on initial load
+  if (loading && !report) {
+    // Show full page loader only on initial load
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -282,8 +325,12 @@ export function ReportDetails() {
   if (!report) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Report Not Found</h2>
-        <p className="text-gray-600 mb-6">The report you are looking for does not exist or could not be loaded.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          Report Not Found
+        </h2>
+        <p className="text-gray-600 mb-6">
+          The report you are looking for does not exist or could not be loaded.
+        </p>
         <Link
           to="/reports"
           className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base font-medium"
@@ -296,11 +343,14 @@ export function ReportDetails() {
   }
 
   const StatusIcon = getStatusIcon(report.status); // This should now use report.status which is uppercase
-  const cardClassName = "bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-300";
-  const labelClassName = "block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1";
-  const valueClassName = "text-sm text-gray-800 bg-gray-50 rounded-md px-3 py-2";
-  const valueLargeClassName = "text-base text-gray-800 bg-gray-50 rounded-md px-4 py-3";
-
+  const cardClassName =
+    "bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-300";
+  const labelClassName =
+    "block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1";
+  const valueClassName =
+    "text-sm text-gray-800 bg-gray-50 rounded-md px-3 py-2";
+  const valueLargeClassName =
+    "text-base text-gray-800 bg-gray-50 rounded-md px-4 py-3";
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto py-8 px-4">
@@ -422,37 +472,30 @@ export function ReportDetails() {
             </div>
           </div>
           {/* Photo Evidence */}
-          {/* Ensure image_urls is checked (it's optional in ApiWaterReport) */}
-          {report.image_urls && report.image_urls.length > 0 ? (
+          {/* Display images from image_base64_data */}
+          {report.image_base64_data && report.image_base64_data.length > 0 ? (
             <div className={cardClassName}>
               <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center">
                 <Camera className="h-5 w-5 mr-2.5 text-gray-600" />
-                Photo Evidence ({report.image_urls.length})
+                Photo Evidence ({report.image_base64_data.length})
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {report.image_urls.map((url, index) => (
+                {report.image_base64_data.map((base64String, index) => (
                   <div
                     key={index}
                     className="rounded-lg overflow-hidden border border-gray-200 aspect-w-1 aspect-h-1"
                   >
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={`View full image ${index + 1}`}
-                    >
-                      <img
-                        src={url}
-                        alt={`Report evidence ${index + 1}`}
-                        className="w-full h-full object-cover bg-gray-100 hover:opacity-90 transition-opacity"
-                      />
-                    </a>
+                    {/* Browsers can display Base64 directly in src. No need for <a> tag unless you want to open it separately, which is tricky with long base64 strings. */}
+                    <img
+                      src={base64String} // Use the Base64 data URI
+                      alt={`Report evidence ${index + 1}`}
+                      className="w-full h-full object-cover bg-gray-100"
+                    />
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}{" "}
-          {/* Removed old image_url fallback as it's not in ApiWaterReport defined in Reports.tsx */}
+          ) : null}
           {/* Interactive Leaflet Map */}
           {report.latitude && report.longitude && (
             <div className={cardClassName}>

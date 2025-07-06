@@ -28,7 +28,7 @@ export interface ApiWaterReport {
   location_address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  image_urls?: string[] | null;
+  image_base64_data?: string[] | null; // Changed from image_urls
   status: "PENDING" | "IN_PROGRESS" | "RESOLVED"; // Note: Enums from Prisma are uppercase
   assigned_to?: string;
   createdAt: string; // Prisma uses ISO string
@@ -43,7 +43,7 @@ export interface ApiWaterReport {
   // For now, assuming 'location' was derived or an alias.
 }
 
-const API_BASE_URL = "http://192.168.8.126:3001/api"; // Should be in .env ideally
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; // Should be in .env ideally
 
 export function Reports() {
   const [reports, setReports] = useState<ApiWaterReport[]>([]);
@@ -55,8 +55,10 @@ export function Reports() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("created_at");
+  const [sortBy, setSortBy] = useState("createdAt"); // Adjusted to match Prisma field 'createdAt'
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // API_BASE_URL is already defined at the top of the file using import.meta.env.VITE_API_BASE_URL
 
   useEffect(() => {
     fetchReports();
@@ -75,16 +77,23 @@ export function Reports() {
   ]);
 
   const fetchReports = async () => {
-    const isRefresh = !loading;
-    if (isRefresh) setRefreshing(true);
+    const isRefresh = refreshing || loading; // Consider initial load also a refresh for state setting
+    if (!loading && !refreshing) setLoading(true); // Set loading if not already refreshing
+    if (!refreshing) setRefreshing(true);
 
     try {
-      const session = await supabase.auth.getSession();
+      const session = await supabase.auth.getSession(); // For auth token
       const token = session?.data.session?.access_token;
 
       if (!token) {
         throw new Error("No authentication token found. Please log in.");
       }
+
+      // This part is already correct as it fetches from API_BASE_URL/reports
+      // which was updated in a previous step.
+      // The existing fetch logic here should be fine.
+      // The main change was ensuring API_BASE_URL itself is from .env.
+      // We just need to ensure the processing and state updates are robust.
 
       const response = await fetch(`${API_BASE_URL}/reports`, {
         headers: {
@@ -99,11 +108,10 @@ export function Reports() {
         );
       }
 
-      const data: ApiWaterReport[] = await response.json();
+      let data: ApiWaterReport[] = await response.json();
 
-      // Process reports to extract location from coordinates if needed (client-side geocoding)
-      // Note: Prisma enums are uppercase, Supabase might have been lowercase. Adjust UI if needed.
-      const processedReports = await Promise.all(
+      // Client-side geocoding can remain if desired
+      data = await Promise.all(
         (data || []).map(async (report) => {
           if (!report.location_address && report.latitude && report.longitude) {
             try {
@@ -114,20 +122,20 @@ export function Reports() {
               return { ...report, location_address: address };
             } catch (error) {
               console.warn("Failed to reverse geocode:", error);
-              return report;
+              return report; // Return report without address if geocoding fails
             }
           }
           return report;
         })
       );
 
-      setReports(processedReports);
+      setReports(data);
     } catch (error: any) {
       console.error("Error fetching reports:", error.message || error);
-      // You might want to show a toast notification here using error.message
+      // Optionally set an error state here to display to the user
     } finally {
       setLoading(false);
-      if (isRefresh) setRefreshing(false);
+      setRefreshing(false);
     }
   };
 
@@ -185,7 +193,7 @@ export function Reports() {
       let aValue: any, bValue: any;
 
       switch (sortBy) {
-        case "created_at": // Field in ApiWaterReport is 'createdAt'
+        case "createdAt": // Field in ApiWaterReport is 'createdAt'
           aValue = new Date(a.createdAt).getTime();
           bValue = new Date(b.createdAt).getTime();
           break;
@@ -510,8 +518,8 @@ export function Reports() {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
-              <option value="created_at-desc">Newest First</option>
-              <option value="created_at-asc">Oldest First</option>
+              <option value="createdAt-desc">Newest First</option>
+              <option value="createdAt-asc">Oldest First</option>
               <option value="severity-desc">Severity High-Low</option>
               <option value="severity-asc">Severity Low-High</option>
             </select>
