@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import prisma from "../lib/prisma";
-import { ReportStatus } from "@prisma/client"; // Import ReportStatus
+import { ReportStatus } from "../../prisma/generated/client"; // Import ReportStatus
 import { authenticateToken, AuthenticatedRequest } from "../middleware/auth";
 import { sendEmail } from "../lib/email";
 import { getReportStatusUpdateTemplate } from "../templates/reportStatusUpdate";
@@ -38,39 +38,6 @@ router.get(
     }
   }
 );
-
-// GET a single water report by ID (protected)
-router.get(
-  "/:id",
-  authenticateToken,
-  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const { id } = req.params;
-    try {
-      const report = await prisma.waterReport.findUnique({
-        where: { id: String(id) },
-        include: {
-          user: {
-            select: {
-              email: true,
-              full_name: true,
-            },
-          },
-        },
-      });
-      if (!report) {
-        res.status(404).json({ error: "Report not found" });
-        return;
-      }
-      res.json(report);
-      return;
-    } catch (error) {
-      console.error(`Failed to fetch report ${id}:`, error);
-      res.status(500).json({ error: `Failed to fetch report ${id}` });
-      return;
-    }
-  }
-);
-
 // GET reports for the authenticated user (protected)
 router.get(
   "/user-reports", // New dedicated endpoint
@@ -98,11 +65,49 @@ router.get(
           createdAt: "desc",
         },
       });
-      res.json(reports);
+      // Transform the data to match frontend expectations
+      const transformedReports = reports.map((report) => ({
+        ...report,
+        created_at: report.createdAt, // Map createdAt to created_at
+        updated_at: report.updatedAt, // Map updatedAt to updated_at if needed
+      }));
+
+      res.json(transformedReports);
       return;
     } catch (error) {
       console.error("Failed to fetch user-specific reports:", error);
       res.status(500).json({ error: "Failed to fetch your water reports" });
+      return;
+    }
+  }
+);
+// GET a single water report by ID (protected)
+router.get(
+  "/:id",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const { id } = req.params;
+    try {
+      const report = await prisma.waterReport.findUnique({
+        where: { id: String(id) },
+        include: {
+          user: {
+            select: {
+              email: true,
+              full_name: true,
+            },
+          },
+        },
+      });
+      if (!report) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+      res.json(report);
+      return;
+    } catch (error) {
+      console.error(`Failed to fetch report ${id}:`, error);
+      res.status(500).json({ error: `Failed to fetch report ${id}` });
       return;
     }
   }

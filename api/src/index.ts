@@ -28,6 +28,7 @@ app.get("/api", (req: Request, res: Response) => {
   res.send("Water Report API is running!");
 });
 
+app.use((req, res, next) => { console.log(`API Request Log: ${req.method} ${req.originalUrl}`); next(); });
 // Mount report routes
 app.use("/api/reports", reportRoutes);
 // Mount user routes
