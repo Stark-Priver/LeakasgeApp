@@ -16,21 +16,25 @@ dotenv_1.default.config(); // This will load from `api/.env` if CWD is `api/`
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const reportRoutes_1 = __importDefault(require("./routes/reportRoutes")); // Import report routes
+const userRoutes_1 = __importDefault(require("./routes/userRoutes")); // Import user routes
 // import prisma from './lib/prisma'; // Prisma is used within routes
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Test route
-app.get('/api', (req, res) => {
-    res.send('Water Report API is running!');
+app.get("/api", (req, res) => {
+    res.send("Water Report API is running!");
 });
+app.use((req, res, next) => { console.log(`API Request Log: ${req.method} ${req.originalUrl}`); next(); });
 // Mount report routes
-app.use('/api/reports', reportRoutes_1.default);
+app.use("/api/reports", reportRoutes_1.default);
+// Mount user routes
+app.use("/api/users", userRoutes_1.default);
 // Global error handler (very basic)
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).send('Something broke!');
+    res.status(500).send("Something broke!");
 });
 app.listen(PORT, () => {
     console.log(`API Server is running on http://localhost:${PORT}`);

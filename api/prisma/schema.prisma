@@ -3,6 +3,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "./generated/client"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -32,7 +34,7 @@ model WaterReport {
   location_address String?
   latitude         Float?
   longitude        Float?
-  image_urls       String[]     @default([]) // Array of strings for image URLs
+  image_base64_data String[] @default([]) @db.Text
   status           ReportStatus @default(PENDING)
   assigned_to      String?      // Could be an ID of a technician or a name
   createdAt        DateTime     @default(now()) @map("created_at")

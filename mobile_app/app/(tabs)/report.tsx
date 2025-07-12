@@ -19,23 +19,28 @@ import { supabase } from '@/lib/supabase'; // Keep for image uploads for now
 import { useAuth } from '@/hooks/useAuth';
 // WaterReportInsert might not be fully compatible, define specific payload type
 // import { WaterReportInsert } from '@/types/database';
-import { Camera, MapPin, Image as ImageIcon, Upload, AlertCircle } from 'lucide-react-native';
+import {
+  Camera,
+  MapPin,
+  Image as ImageIcon,
+  Upload,
+  AlertCircle,
+} from 'lucide-react-native';
 
 // API base URL - replace with your actual API URL, possibly from .env
-const API_BASE_URL = 'http://192.168.8.126:3001/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 // Interface for the data payload to the API
 interface ApiReportPayload {
   issue_type: string; // e.g., LEAKAGE
-  severity: string;   // e.g., HIGH
+  severity: string; // e.g., HIGH
   description: string;
   location_address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  image_urls?: string[] | null;
+  image_base64_data?: string[] | null; // Changed from image_urls
   // user_id is added by the backend using the token
 }
-
 
 // Standardized issue types and severity levels for UI
 // Values will be converted to UPPERCASE for API
@@ -52,14 +57,19 @@ const severityLevels = [
 ];
 
 export default function Report() {
-  const [selectedType, setSelectedType] = useState<string | undefined>(undefined);
-  const [selectedSeverity, setSelectedSeverity] = useState<string | undefined>(undefined);
+  const [selectedType, setSelectedType] = useState<string | undefined>(
+    undefined
+  );
+  const [selectedSeverity, setSelectedSeverity] = useState<string | undefined>(
+    undefined
+  );
   const [description, setDescription] = useState('');
-  const [imageUris, setImageUris] = useState<string[]>([]); // Changed from imageUri to imageUris
-  const [gpsLocation, setGpsLocation] = useState<Location.LocationObject | null>(null);
+  const [imageBase64Strings, setImageBase64Strings] = useState<string[]>([]); // New state for Base64 strings
+  const [gpsLocation, setGpsLocation] =
+    useState<Location.LocationObject | null>(null);
   const [manualLocationAddress, setManualLocationAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null); // Renamed from uploadError for clarity
 
   const { user } = useAuth();
   const router = useRouter();
@@ -70,7 +80,10 @@ export default function Report() {
       if (Platform.OS !== 'web') {
         const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
         const locationPerm = await Location.requestForegroundPermissionsAsync();
-        if (cameraPerm.status !== 'granted' || locationPerm.status !== 'granted') {
+        if (
+          cameraPerm.status !== 'granted' ||
+          locationPerm.status !== 'granted'
+        ) {
           Alert.alert(
             'Permissions Required',
             'Camera and location permissions are needed for full functionality. You can grant them in settings.'
@@ -83,7 +96,10 @@ export default function Report() {
   const getCurrentLocation = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Location permission is required to get current location.');
+      Alert.alert(
+        'Permission Denied',
+        'Location permission is required to get current location.'
+      );
       return;
     }
 
@@ -97,7 +113,10 @@ export default function Report() {
       Alert.alert('Success', 'Location captured successfully!');
     } catch (error) {
       console.error('Failed to get current location:', error);
-      Alert.alert('Error', 'Failed to get current location. Please try again or enter manually.');
+      Alert.alert(
+        'Error',
+        'Failed to get current location. Please try again or enter manually.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -106,92 +125,67 @@ export default function Report() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Media library permission is required to pick an image.');
-        return;
+      Alert.alert(
+        'Permission Denied',
+        'Media library permission is required to pick an image.'
+      );
+      return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7, // Slightly reduced quality for faster uploads
+      quality: 0.5, // Reduced quality slightly for smaller Base64 strings
+      base64: true, // Request Base64 data
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      //setImageUri(result.assets[0].uri);
-      setImageUris(prevUris => [...prevUris, result.assets[0].uri]);
-      setUploadError(null); // Clear previous upload error
+    if (
+      !result.canceled &&
+      result.assets &&
+      result.assets.length > 0 &&
+      result.assets[0].base64
+    ) {
+      const base64String = `data:image/jpeg;base64,${result.assets[0].base64}`; // Assuming jpeg, adjust if type is available
+      setImageBase64Strings((prevStrings) => [...prevStrings, base64String]);
+      setSubmissionError(null);
     }
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-     if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera permission is required to take a photo.');
-        return;
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'Camera permission is required to take a photo.'
+      );
+      return;
     }
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5, // Reduced quality slightly for smaller Base64 strings
+      base64: true, // Request Base64 data
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      //setImageUri(result.assets[0].uri);
-      setImageUris(prevUris => [...prevUris, result.assets[0].uri]);
-      setUploadError(null); // Clear previous upload error
+    if (
+      !result.canceled &&
+      result.assets &&
+      result.assets.length > 0 &&
+      result.assets[0].base64
+    ) {
+      const base64String = `data:image/jpeg;base64,${result.assets[0].base64}`; // Assuming jpeg
+      setImageBase64Strings((prevStrings) => [...prevStrings, base64String]);
+      setSubmissionError(null);
     }
   };
 
-  const removeImage = (uriToRemove: string) => {
-    setImageUris(prevUris => prevUris.filter(uri => uri !== uriToRemove));
+  const removeImage = (base64ToRemove: string) => {
+    setImageBase64Strings((prevStrings) =>
+      prevStrings.filter((bs64) => bs64 !== base64ToRemove)
+    );
   };
 
-  const uploadImages = async (uris: string[]): Promise<string[]> => {
-    if (!uris || uris.length === 0) return [];
-    setUploadError(null);
-    const uploadedUrls: string[] = [];
-    let anyUploadFailed = false;
-
-    for (const uri of uris) {
-      try {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const fileExt = uri.split('.').pop();
-        const fileName = `report-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${user?.id || 'anonymous'}/${fileName}`; // Organize by user ID
-
-        const { error: uploadError } = await supabase.storage
-          .from('issuesimages')
-          .upload(filePath, blob, {
-              contentType: blob.type,
-              upsert: false
-          });
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('issuesimages')
-          .getPublicUrl(filePath);
-
-        if (publicUrl) {
-          uploadedUrls.push(publicUrl);
-        } else {
-          console.warn('Successfully uploaded image but failed to get public URL for:', uri);
-          // anyUploadFailed = true; // Decide if this constitutes a failure
-        }
-      } catch (error: any) {
-        console.error('Error uploading image:', error);
-        anyUploadFailed = true;
-        // Continue trying to upload other images
-      }
-    }
-    if (anyUploadFailed) {
-        setUploadError(`One or more images failed to upload. Report will be submitted with successfully uploaded images.`);
-    }
-    return uploadedUrls;
-  };
+  // uploadImages function is no longer needed as images are sent as Base64 strings directly.
 
   const submitReport = async () => {
     if (!user) {
@@ -199,25 +193,24 @@ export default function Report() {
       return;
     }
     if (!selectedType || !selectedSeverity || !description.trim()) {
-      Alert.alert('Error', 'Please fill in Issue Type, Severity, and Description.');
+      Alert.alert(
+        'Error',
+        'Please fill in Issue Type, Severity, and Description.'
+      );
       return;
     }
     if (!gpsLocation && !manualLocationAddress.trim()) {
-      Alert.alert('Error', 'Please provide your location (either GPS or manual address).');
+      Alert.alert(
+        'Error',
+        'Please provide your location (either GPS or manual address).'
+      );
       return;
     }
 
     setIsSubmitting(true);
-    setUploadError(null);
-    let uploadedImageUrls: string[] = [];
-
-    if (imageUris.length > 0) {
-      uploadedImageUrls = await uploadImages(imageUris);
-      // uploadImages function sets uploadError state if any image fails.
-    }
+    setSubmissionError(null); // Use the renamed error state
 
     // Prepare data for the API
-    // Ensure selectedType and selectedSeverity are defined before using them
     if (!selectedType || !selectedSeverity) {
       Alert.alert('Error', 'Issue Type and Severity must be selected.');
       setIsSubmitting(false);
@@ -225,14 +218,29 @@ export default function Report() {
     }
 
     const reportData: ApiReportPayload = {
-      issue_type: selectedType.toUpperCase(), // Convert to UPPERCASE
-      severity: selectedSeverity.toUpperCase(), // Convert to UPPERCASE
+      issue_type: selectedType.toUpperCase(),
+      severity: selectedSeverity.toUpperCase(),
       description: description.trim(),
-      image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined, // API expects array or undefined
+      // image_urls is removed, will be replaced by image_base64_data by the API
+      image_base64_data:
+        imageBase64Strings.length > 0 ? imageBase64Strings : undefined,
       latitude: gpsLocation?.coords.latitude,
       longitude: gpsLocation?.coords.longitude,
-      location_address: manualLocationAddress.trim() || undefined, // API expects string or undefined
+      location_address: manualLocationAddress.trim() || undefined,
     };
+
+    // Add image_base64_data to the interface ApiReportPayload
+    // interface ApiReportPayload {
+    //   issue_type: string;
+    //   severity: string;
+    //   description: string;
+    //   location_address?: string | null;
+    //   latitude?: number | null;
+    //   longitude?: number | null;
+    //   image_base64_data?: string[] | null; // Changed from image_urls
+    // }
+    // This change should be done where ApiReportPayload is defined. I'll do that in a separate step if needed,
+    // for now, proceeding with the assumption that the backend will expect image_base64_data.
 
     try {
       // Retrieve session for auth token
@@ -240,7 +248,10 @@ export default function Report() {
       const token = session?.data.session?.access_token;
 
       if (!token) {
-        Alert.alert('Error', 'Authentication token not found. Please log in again.');
+        Alert.alert(
+          'Error',
+          'Authentication token not found. Please log in again.'
+        );
         setIsSubmitting(false);
         return;
       }
@@ -249,7 +260,7 @@ export default function Report() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(reportData),
       });
@@ -258,23 +269,26 @@ export default function Report() {
 
       if (!response.ok) {
         // Use error message from API if available, otherwise default
-        throw new Error(responseData.error || `Server responded with ${response.status}`);
+        throw new Error(
+          responseData.error || `Server responded with ${response.status}`
+        );
       }
 
       Alert.alert('Success', 'Report submitted successfully!', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)') }
+        { text: 'OK', onPress: () => router.replace('/(tabs)') },
       ]);
       // Reset form
       setSelectedType(undefined);
       setSelectedSeverity(undefined);
       setDescription('');
-      setImageUris([]);
+      setImageBase64Strings([]); // Clear Base64 strings
       setGpsLocation(null);
       setManualLocationAddress('');
-
     } catch (error: any) {
       console.error('Error submitting report:', error);
-      Alert.alert('Submission Error', `Failed to submit report: ${error.message || 'Unknown error'}`);
+      const message = error.message || 'Unknown error';
+      setSubmissionError(`Submission Error: ${message}`); // Set submission error state
+      Alert.alert('Submission Error', `Failed to submit report: ${message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -282,29 +296,40 @@ export default function Report() {
 
   const getSeverityColor = (severityValue: string | undefined) => {
     switch (severityValue) {
-      case 'low': return '#10b981'; // Green
-      case 'medium': return '#f59e0b'; // Yellow
-      case 'high': return '#f97316'; // Orange
-      case 'critical': return '#ef4444'; // Red
-      default: return '#d1d5db'; // Default gray for border
+      case 'low':
+        return '#10b981'; // Green
+      case 'medium':
+        return '#f59e0b'; // Yellow
+      case 'high':
+        return '#f97316'; // Orange
+      case 'critical':
+        return '#ef4444'; // Red
+      default:
+        return '#d1d5db'; // Default gray for border
     }
   };
 
   const getSeverityBackgroundColor = (severityValue: string | undefined) => {
-     return selectedSeverity === severityValue ? getSeverityColor(severityValue) : '#ffffff';
-  }
+    return selectedSeverity === severityValue
+      ? getSeverityColor(severityValue)
+      : '#ffffff';
+  };
 
   const getSeverityTextColor = (severityValue: string | undefined) => {
     return selectedSeverity === severityValue ? '#ffffff' : '#374151';
-  }
-
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Report Water Issue</Text>
-          <Text style={styles.subtitle}>Help us improve water system management.</Text>
+          <Text style={styles.subtitle}>
+            Help us improve water system management.
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -321,7 +346,12 @@ export default function Report() {
                   ]}
                   onPress={() => setSelectedType(type.value)}
                 >
-                  <Text style={[styles.optionText, selectedType === type.value && styles.optionTextSelected]}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      selectedType === type.value && styles.optionTextSelected,
+                    ]}
+                  >
                     {type.label}
                   </Text>
                 </TouchableOpacity>
@@ -339,13 +369,20 @@ export default function Report() {
                   style={[
                     styles.severityButton,
                     {
-                      backgroundColor: getSeverityBackgroundColor(severity.value),
-                      borderColor: getSeverityColor(severity.value)
+                      backgroundColor: getSeverityBackgroundColor(
+                        severity.value
+                      ),
+                      borderColor: getSeverityColor(severity.value),
                     },
                   ]}
                   onPress={() => setSelectedSeverity(severity.value)}
                 >
-                  <Text style={[styles.severityText, { color: getSeverityTextColor(severity.value) }]}>
+                  <Text
+                    style={[
+                      styles.severityText,
+                      { color: getSeverityTextColor(severity.value) },
+                    ]}
+                  >
                     {severity.label}
                   </Text>
                 </TouchableOpacity>
@@ -370,39 +407,61 @@ export default function Report() {
 
           {/* Photo Evidence */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Photo Evidence ({imageUris.length} image{imageUris.length === 1 ? '' : 's'})</Text>
+            <Text style={styles.sectionTitle}>
+              Photo Evidence ({imageBase64Strings.length} image
+              {imageBase64Strings.length === 1 ? '' : 's'})
+            </Text>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagePreviewsScrollView}>
-              {imageUris.map((uri, index) => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.imagePreviewsScrollView}
+            >
+              {imageBase64Strings.map((base64String, index) => (
                 <View key={index} style={styles.imagePreviewItem}>
-                  <Image source={{ uri }} style={styles.imagePreview} />
-                  <TouchableOpacity style={styles.removeImageButton} onPress={() => removeImage(uri)}>
+                  <Image
+                    source={{ uri: base64String }}
+                    style={styles.imagePreview}
+                  />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => removeImage(base64String)}
+                  >
                     <Text style={styles.removeImageButtonText}>✕</Text>
                   </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
 
-            {imageUris.length < 5 && ( // Limit to 5 images for example
+            {imageBase64Strings.length < 5 && ( // Limit to 5 images for example
               <View style={styles.photoButtonsContainer}>
-                <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
+                <TouchableOpacity
+                  style={styles.photoButton}
+                  onPress={takePhoto}
+                >
                   <Camera size={22} color="#2563EB" />
                   <Text style={styles.photoButtonText}>Take Photo</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                <TouchableOpacity
+                  style={styles.photoButton}
+                  onPress={pickImage}
+                >
                   <ImageIcon size={22} color="#2563EB" />
                   <Text style={styles.photoButtonText}>From Gallery</Text>
                 </TouchableOpacity>
               </View>
             )}
-            {imageUris.length > 0 && imageUris.length >= 5 && (
-                <Text style={styles.maxImagesText}>Maximum 5 images allowed.</Text>
-            )}
+            {imageBase64Strings.length > 0 &&
+              imageBase64Strings.length >= 5 && (
+                <Text style={styles.maxImagesText}>
+                  Maximum 5 images allowed.
+                </Text>
+              )}
 
-            {uploadError && (
+            {submissionError && ( // Changed from uploadError to submissionError
               <View style={styles.uploadErrorContainer}>
                 <AlertCircle size={16} color="#ef4444" />
-                <Text style={styles.uploadErrorText}>{uploadError}</Text>
+                <Text style={styles.uploadErrorText}>{submissionError}</Text>
               </View>
             )}
           </View>
@@ -419,13 +478,21 @@ export default function Report() {
               disabled={isSubmitting}
             >
               <MapPin size={20} color={gpsLocation ? '#10b981' : '#2563EB'} />
-              <Text style={[styles.locationButtonText, gpsLocation && styles.locationButtonTextSuccess]}>
-                {gpsLocation ? 'GPS Location Captured' : 'Get Current GPS Location'}
+              <Text
+                style={[
+                  styles.locationButtonText,
+                  gpsLocation && styles.locationButtonTextSuccess,
+                ]}
+              >
+                {gpsLocation
+                  ? 'GPS Location Captured'
+                  : 'Get Current GPS Location'}
               </Text>
             </TouchableOpacity>
             {gpsLocation && (
               <Text style={styles.locationDetailsText}>
-                Lat: {gpsLocation.coords.latitude.toFixed(5)}, Lon: {gpsLocation.coords.longitude.toFixed(5)}
+                Lat: {gpsLocation.coords.latitude.toFixed(5)}, Lon:{' '}
+                {gpsLocation.coords.longitude.toFixed(5)}
               </Text>
             )}
             <Text style={styles.orText}>Or enter address manually:</Text>
@@ -443,7 +510,10 @@ export default function Report() {
 
           {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.submitButton, (isSubmitting) && styles.submitButtonDisabled]}
+            style={[
+              styles.submitButton,
+              isSubmitting && styles.submitButtonDisabled,
+            ]}
             onPress={submitReport}
             disabled={isSubmitting}
           >
@@ -664,7 +734,8 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontFamily: 'Inter-Regular',
   },
-  inputField: { // General purpose input field style
+  inputField: {
+    // General purpose input field style
     backgroundColor: '#ffffff',
     borderRadius: 8,
     borderWidth: 1,

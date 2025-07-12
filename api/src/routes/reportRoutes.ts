@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import prisma from "../lib/prisma";
-import { ReportStatus } from "@prisma/client"; // Import ReportStatus
+import { ReportStatus } from "../../prisma/generated/client"; // Import ReportStatus
 import { authenticateToken, AuthenticatedRequest } from "../middleware/auth";
 
 const router = Router();
@@ -36,7 +36,49 @@ router.get(
     }
   }
 );
+// GET reports for the authenticated user (protected)
+router.get(
+  "/user-reports", // New dedicated endpoint
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(403).json({ error: "User ID not found in token." });
+      return;
+    }
 
+    try {
+      const reports = await prisma.waterReport.findMany({
+        where: { user_id: userId },
+        include: {
+          user: {
+            // Still include user details, though it'll be the same user
+            select: {
+              email: true,
+              full_name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+      // Transform the data to match frontend expectations
+      const transformedReports = reports.map((report) => ({
+        ...report,
+        created_at: report.createdAt, // Map createdAt to created_at
+        updated_at: report.updatedAt, // Map updatedAt to updated_at if needed
+      }));
+
+      res.json(transformedReports);
+      return;
+    } catch (error) {
+      console.error("Failed to fetch user-specific reports:", error);
+      res.status(500).json({ error: "Failed to fetch your water reports" });
+      return;
+    }
+  }
+);
 // GET a single water report by ID (protected)
 router.get(
   "/:id",
@@ -82,16 +124,14 @@ router.post(
       location_address,
       latitude,
       longitude,
-      image_urls = [], // Default to empty array if not provided
+      image_base64_data = [], // Expecting Base64 data array
     } = req.body;
 
     // Basic validation
     if (!issue_type || !severity || !description) {
-      res
-        .status(400)
-        .json({
-          error: "Missing required fields: issue_type, severity, description",
-        });
+      res.status(400).json({
+        error: "Missing required fields: issue_type, severity, description",
+      });
       return;
     }
 
@@ -102,7 +142,7 @@ router.post(
       return;
     }
 
-    console.log("Attempting to create report for userId:", userId); // Added for debugging
+    // console.log("Attempting to create report for userId:", userId, "with image_base64_data length:", image_base64_data?.length);
     try {
       const newReport = await prisma.waterReport.create({
         data: {
@@ -113,7 +153,7 @@ router.post(
           location_address,
           latitude,
           longitude,
-          image_urls,
+          image_base64_data, // Save the array of Base64 strings
           status: "PENDING", // Default status
         },
         include: {
@@ -156,12 +196,10 @@ router.put(
         String(status).toUpperCase()
       )
     ) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Invalid status provided. Must be PENDING, IN_PROGRESS, or RESOLVED.",
-        });
+      res.status(400).json({
+        error:
+          "Invalid status provided. Must be PENDING, IN_PROGRESS, or RESOLVED.",
+      });
       return;
     }
 
@@ -188,11 +226,9 @@ router.put(
     }
 
     if (Object.keys(updateData).length === 0) {
-      res
-        .status(400)
-        .json({
-          error: "No updateable fields provided (status, assigned_to).",
-        });
+      res.status(400).json({
+        error: "No updateable fields provided (status, assigned_to).",
+      });
       return;
     }
 
