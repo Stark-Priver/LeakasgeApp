@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import prisma from "../lib/prisma";
 import { ReportStatus } from "@prisma/client"; // Import ReportStatus
 import { authenticateToken, AuthenticatedRequest } from "../middleware/auth";
+import { sendEmail } from "../lib/email";
+import { getReportStatusUpdateTemplate } from "../templates/reportStatusUpdate";
 
 const router = Router();
 
@@ -241,6 +243,21 @@ router.put(
           },
         },
       });
+
+      if (updatedReport.status && updatedReport.user) {
+        const { email, full_name } = updatedReport.user;
+        const emailHtml = getReportStatusUpdateTemplate(
+          full_name ?? "User",
+          updatedReport.id,
+          updatedReport.status
+        );
+        await sendEmail({
+          to: email,
+          subject: `Report ${updatedReport.id} Status Updated`,
+          html: emailHtml,
+        });
+      }
+
       res.json(updatedReport);
       return;
     } catch (error: any) {
