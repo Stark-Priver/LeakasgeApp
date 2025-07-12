@@ -15,7 +15,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3",
     "recharts": "^2.12.2",
-    "@supabase/supabase-js": "^2.39.7"
+    "@supabase/supabase-js": "^2.39.7",
+    "@emailjs/browser": "^4.3.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

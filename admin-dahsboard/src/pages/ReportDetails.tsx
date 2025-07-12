@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import emailjs from '@emailjs/browser';
 import { 
   ArrowLeft, 
   MapPin, 
@@ -218,6 +219,27 @@ export function ReportDetails() {
       setCurrentAssignedTo(updatedReportFromServer.assigned_to || '');
       setCurrentStatus(updatedReportFromServer.status);
       // alert(`Report status updated to ${formatText(newStatus)}!`); // Optional: specific feedback
+
+      // Send email notification
+      if (updatedReportFromServer.user?.email) {
+        const templateParams = {
+          to_name: updatedReportFromServer.user.full_name || 'User',
+          to_email: updatedReportFromServer.user.email,
+          report_id: updatedReportFromServer.id,
+          report_status: newStatus,
+        };
+
+        emailjs.send(
+          import.meta.env.VITE_EMAILJS_SERVICE_ID,
+          import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+          templateParams,
+          import.meta.env.VITE_EMAILJS_USER_ID
+        ).then((response) => {
+          console.log('SUCCESS!', response.status, response.text);
+        }, (err) => {
+          console.log('FAILED...', err);
+        });
+      }
 
     } catch (error: any) {
       console.error('Error updating report status:', error.message || error);
