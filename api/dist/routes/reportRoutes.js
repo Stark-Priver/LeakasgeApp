@@ -44,6 +44,42 @@ router.get("/", auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0
         return;
     }
 }));
+// GET reports for the authenticated user (protected)
+router.get("/user-reports", // New dedicated endpoint
+auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    if (!userId) {
+        res.status(403).json({ error: "User ID not found in token." });
+        return;
+    }
+    try {
+        const reports = yield prisma_1.default.waterReport.findMany({
+            where: { user_id: userId },
+            include: {
+                user: {
+                    // Still include user details, though it'll be the same user
+                    select: {
+                        email: true,
+                        full_name: true,
+                    },
+                },
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+        });
+        // Transform the data to match frontend expectations
+        const transformedReports = reports.map((report) => (Object.assign(Object.assign({}, report), { created_at: report.createdAt, updated_at: report.updatedAt })));
+        res.json(transformedReports);
+        return;
+    }
+    catch (error) {
+        console.error("Failed to fetch user-specific reports:", error);
+        res.status(500).json({ error: "Failed to fetch your water reports" });
+        return;
+    }
+}));
 // GET a single water report by ID (protected)
 router.get("/:id", auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
@@ -76,13 +112,11 @@ router.get("/:id", auth_1.authenticateToken, (req, res) => __awaiter(void 0, voi
 // This is a basic example. Needs validation and more robust error handling.
 router.post("/", auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
-    const { issue_type, severity, description, location_address, latitude, longitude, image_urls = [], // Default to empty array if not provided
+    const { issue_type, severity, description, location_address, latitude, longitude, image_base64_data = [], // Expecting Base64 data array
      } = req.body;
     // Basic validation
     if (!issue_type || !severity || !description) {
-        res
-            .status(400)
-            .json({
+        res.status(400).json({
             error: "Missing required fields: issue_type, severity, description",
         });
         return;
@@ -92,7 +126,7 @@ router.post("/", auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 
         res.status(403).json({ error: "User ID not found in token." });
         return;
     }
-    console.log("Attempting to create report for userId:", userId); // Added for debugging
+    // console.log("Attempting to create report for userId:", userId, "with image_base64_data length:", image_base64_data?.length);
     try {
         const newReport = yield prisma_1.default.waterReport.create({
             data: {
@@ -103,7 +137,7 @@ router.post("/", auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 
                 location_address,
                 latitude,
                 longitude,
-                image_urls,
+                image_base64_data, // Save the array of Base64 strings
                 status: "PENDING", // Default status
             },
             include: {
@@ -138,9 +172,7 @@ router.put("/:id", auth_1.authenticateToken, (req, res) => __awaiter(void 0, voi
     // Validation for status if provided
     if (status &&
         !["PENDING", "IN_PROGRESS", "RESOLVED"].includes(String(status).toUpperCase())) {
-        res
-            .status(400)
-            .json({
+        res.status(400).json({
             error: "Invalid status provided. Must be PENDING, IN_PROGRESS, or RESOLVED.",
         });
         return;
@@ -163,9 +195,7 @@ router.put("/:id", auth_1.authenticateToken, (req, res) => __awaiter(void 0, voi
         updateData.assigned_to = assigned_to ? String(assigned_to) : null;
     }
     if (Object.keys(updateData).length === 0) {
-        res
-            .status(400)
-            .json({
+        res.status(400).json({
             error: "No updateable fields provided (status, assigned_to).",
         });
         return;

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  ScrollView,
   ActivityIndicator, // Added ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -241,7 +242,16 @@ export default function MyReports() {
           <View style={styles.footerItem}>
             <Calendar size={14} color="#6b7280" />
             <Text style={styles.footerText}>
-              {new Date(item.created_at).toLocaleDateString()}
+              {(() => {
+                try {
+                  const date = new Date(item.created_at);
+                  return isNaN(date.getTime())
+                    ? 'Invalid date'
+                    : date.toLocaleDateString();
+                } catch (error) {
+                  return 'Invalid date';
+                }
+              })()}
             </Text>
           </View>
         </View>
