@@ -1,18 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   Search, 
   Plus, 
   Edit, 
-  Trash2, 
-  Mail, 
   Calendar,
   Shield,
   User as UserIcon,
   MoreVertical,
   AlertTriangle
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { User } from '../lib/supabase';
+import { adminApiClient, User } from '../lib/apiClient';
 
 export function Users() {
   const [users, setUsers] = useState<User[]>([]);
@@ -32,13 +29,8 @@ export function Users() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*, is_banned') // Ensure is_banned is selected
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
+      const users = await adminApiClient.getUsers();
+      setUsers(users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -48,19 +40,12 @@ export function Users() {
 
   const toggleUserBanStatus = async (userId: string, currentIsBanned: boolean) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ is_banned: !currentIsBanned })
-        .eq('id', userId)
-        .select()
-        .single(); // Assuming you want the updated user back
-
-      if (error) throw error;
-
-      if (data) {
+      const response = await adminApiClient.banUser(userId, !currentIsBanned);
+      
+      if (response.user) {
         setUsers(prevUsers =>
           prevUsers.map(user =>
-            user.id === userId ? { ...user, is_banned: data.is_banned } : user
+            user._id === userId ? { ...user, is_banned: response.user.is_banned } : user
           )
         );
       }
@@ -166,7 +151,7 @@ export function Users() {
         {filteredUsers.map((user) => {
           const RoleIcon = getRoleIcon(user.role);
           return (
-            <div key={user.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+            <div key={user._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -201,7 +186,7 @@ export function Users() {
                   <span className="text-sm font-medium text-gray-700">Joined</span>
                   <div className="flex items-center text-sm text-gray-500">
                     <Calendar className="h-3 w-3 mr-1" />
-                    {new Date(user.created_at).toLocaleDateString()}
+                    {new Date(user.createdAt).toLocaleDateString()}
                   </div>
                 </div>
 
@@ -228,7 +213,7 @@ export function Users() {
                   Edit
                 </button>
                 <button
-                  onClick={() => toggleUserBanStatus(user.id, user.is_banned)}
+                  onClick={() => toggleUserBanStatus(user._id, user.is_banned)}
                   className={`flex-1 inline-flex items-center justify-center px-3 py-2 border text-sm font-medium rounded-lg transition-colors duration-200
                               ${user.is_banned
                                 ? 'border-yellow-500 text-yellow-700 bg-yellow-50 hover:bg-yellow-100'

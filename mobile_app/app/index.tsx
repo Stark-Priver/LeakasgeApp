@@ -1,21 +1,21 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
+    if (!isLoading) {
       if (user) {
         router.replace('/(tabs)');
       } else {
         router.replace('/auth');
       }
     }
-  }, [user, loading]);
+  }, [user, isLoading]);
 
   return <View style={styles.container} />;
 }

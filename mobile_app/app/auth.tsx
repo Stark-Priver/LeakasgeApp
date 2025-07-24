@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { Droplets, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 
 export default function Auth() {
@@ -22,7 +22,7 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { login, register } = useAuth();
   const router = useRouter();
 
   const handleAuth = async () => {
@@ -37,16 +37,18 @@ export default function Auth() {
     }
 
     setLoading(true);
-    const { error } = isSignUp 
-      ? await signUp(email, password)
-      : await signIn(email, password);
-
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
+    try {
+      if (isSignUp) {
+        await register(email, password);
+      } else {
+        await login(email, password);
+      }
       router.replace('/(tabs)');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

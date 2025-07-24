@@ -1,99 +1,101 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import type { User } from "@supabase/supabase-js";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { adminApiClient, User } from '../lib/apiClient';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuthStatus();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-  };
-
-  const signUp = async (email: string, password: string, fullName?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: "admin",
-        },
-      },
-    });
-
-    if (error) throw error;
-
-    // If user is created, also create a record in the users table
-    if (data.user) {
-      const { error: profileError } = await supabase.from("users").insert([
-        {
-          id: data.user.id,
-          email: data.user.email,
-          full_name: fullName,
-          role: "admin",
-        },
-      ]);
-
-      if (profileError) {
-        console.error("Error creating user profile:", profileError);
-        // Don't throw here as the auth user was created successfully
+  const checkAuthStatus = async () => {
+    try {
+      if (adminApiClient.isAuthenticated()) {
+        const currentUser = adminApiClient.getCurrentUser();
+        
+        // Check if user is admin
+        if (currentUser && currentUser.role === 'ADMIN') {
+          setUser(currentUser);
+          setIsAuthenticated(true);
+        } else {
+          // User is not admin, log them out
+          adminApiClient.logout();
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
       }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+  const signIn = async (email: string, password: string): Promise<void> => {
+    try {
+      setLoading(true);
+      const response = await adminApiClient.login(email, password);
+      
+      // Check if user is admin
+      if (response.user.role !== 'ADMIN') {
+        adminApiClient.logout();
+        throw new Error('Admin access required');
+      }
+      
+      setUser(response.user);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const value = {
+  const signOut = (): void => {
+    adminApiClient.logout();
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
+  const value: AuthContextType = {
     user,
     loading,
+    isAuthenticated,
     signIn,
-    signUp,
     signOut,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-export function useAuth() {
+function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }
+
+export { useAuth };

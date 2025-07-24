@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  ScrollView,
   ActivityIndicator, // Added ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
-import { WaterReport } from '@/types/database'; // Changed from WaterIssue to WaterReport
+import { apiClient, WaterReport, User } from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Clock,
   TriangleAlert as AlertTriangle,
@@ -24,23 +24,10 @@ import {
 } from 'lucide-react-native'; // Added ImageIcon
 
 // API base URL should be available from environment variables
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-// Define a type for the reports fetched from the API.
-// This should align with what the API returns (similar to WaterReport but potentially with nested user object).
-// For now, assuming it matches WaterReport structure closely enough. If not, adjust this type.
-interface ApiReport extends WaterReport {
-  user?: {
-    // Assuming user details might be nested, matching Prisma include
-    email: string;
-    full_name?: string | null;
-  };
-  image_base64_data?: string[]; // Added for Base64 image data
-  // Ensure all fields used in renderReportItem are covered
-}
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function MyReports() {
-  const [reports, setReports] = useState<ApiReport[]>([]);
+  const [reports, setReports] = useState<WaterReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null); // For displaying API errors
@@ -61,6 +48,7 @@ export default function MyReports() {
 
   const fetchReports = async () => {
     if (!user || !API_BASE_URL) {
+      console.log('Debug: Missing user or API_BASE_URL', { user: !!user, API_BASE_URL });
       setFetchError(
         'Cannot fetch reports: User not authenticated or API URL missing.'
       );
@@ -69,35 +57,15 @@ export default function MyReports() {
       return;
     }
 
+    console.log('Debug: Fetching reports for user:', user.email);
     setLoading(true);
     setFetchError(null); // Clear previous errors
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
-
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/reports/user-reports`, {
-        // Corrected endpoint
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to fetch reports: ${response.statusText}`
-        );
-      }
-
-      const data: ApiReport[] = await response.json();
-      setReports(data || []);
+      // Use the apiClient to fetch user reports - the endpoint already filters by user
+      const userReports = await apiClient.getReports();
+      console.log('Debug: Received reports:', userReports.length);
+      setReports(userReports || []);
     } catch (error: any) {
       console.error('Error fetching reports from API:', error);
       setFetchError(
@@ -127,13 +95,13 @@ export default function MyReports() {
 
   const getSeverityColor = (severity: WaterReport['severity'] | undefined) => {
     switch (severity) {
-      case 'low':
+      case 'LOW':
         return '#10b981'; // Green-500
-      case 'medium':
+      case 'MEDIUM':
         return '#f59e0b'; // Amber-500
-      case 'high':
+      case 'HIGH':
         return '#f97316'; // Orange-500
-      case 'critical':
+      case 'CRITICAL':
         return '#ef4444'; // Red-500
       default:
         return '#6b7280';
@@ -142,11 +110,11 @@ export default function MyReports() {
 
   const getStatusIcon = (status: WaterReport['status'] | undefined) => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return <Clock size={16} color="#d97706" />; // Amber-600
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return <AlertTriangle size={16} color="#2563eb" />; // Blue-600
-      case 'resolved':
+      case 'RESOLVED':
         return <CheckCircle size={16} color="#059669" />; // Green-600
       default:
         return <Clock size={16} color="#4b5563" />; // Gray-600
@@ -157,11 +125,11 @@ export default function MyReports() {
     status: WaterReport['status'] | undefined
   ) => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return '#fef3c7'; // Amber-100
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return '#dbeafe'; // Blue-100
-      case 'resolved':
+      case 'RESOLVED':
         return '#d1fae5'; // Green-100
       default:
         return '#f3f4f6'; // Gray-100
@@ -241,7 +209,16 @@ export default function MyReports() {
           <View style={styles.footerItem}>
             <Calendar size={14} color="#6b7280" />
             <Text style={styles.footerText}>
-              {new Date(item.created_at).toLocaleDateString()}
+              {(() => {
+                try {
+                  const date = new Date(item.createdAt);
+                  return isNaN(date.getTime())
+                    ? 'Invalid date'
+                    : date.toLocaleDateString();
+                } catch (error) {
+                  return 'Invalid date';
+                }
+              })()}
             </Text>
           </View>
         </View>
@@ -295,7 +272,7 @@ export default function MyReports() {
       ) : (
         <FlatList
           data={reports}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id}
           renderItem={renderReportItem}
           ListEmptyComponent={renderEmptyState}
           contentContainerStyle={[

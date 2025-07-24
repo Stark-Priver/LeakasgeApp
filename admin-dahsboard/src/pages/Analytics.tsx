@@ -25,7 +25,7 @@ import {
   Area,
   AreaChart
 } from 'recharts';
-import { supabase } from '../lib/supabase';
+import { adminApiClient } from '../lib/apiClient';
 
 export function Analytics() {
   const [loading, setLoading] = useState(true);

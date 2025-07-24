@@ -9,11 +9,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { User, Mail, LogOut, Settings, CircleHelp as HelpCircle, Shield, Bell, ChevronRight } from 'lucide-react-native';
 
 export default function Profile() {
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -28,13 +28,14 @@ export default function Profile() {
           style: 'destructive',
           onPress: async () => {
             setLoading(true);
-            const { error } = await signOut();
-            if (error) {
-              Alert.alert('Error', 'Failed to sign out');
-            } else {
+            try {
+              await logout();
               router.replace('/auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out');
+            } finally {
+              setLoading(false);
             }
-            setLoading(false);
           },
         },
       ]

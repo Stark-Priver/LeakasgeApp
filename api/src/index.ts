@@ -1,42 +1,56 @@
 import dotenv from "dotenv";
-import path from "path";
-
-// Load environment variables from .env file in the 'api' directory
-// __dirname will be 'api/dist' after compilation, so go up one level for 'api/.env'
-// If running with ts-node, __dirname might be 'api/src'.
-// A more robust way is to specify the path directly if needed or ensure CWD is 'api/'.
-// For now, assuming .env is in the same directory as package.json for the API (i.e., 'api/.env')
-// when the script is run. `ts-node` usually respects this.
-// `nodemon` from root also needs to be configured for CWD or .env path.
-// The `dev` script in `api/package.json` is `nodemon src/index.ts`, so CWD should be `api/`.
-dotenv.config(); // This will load from `api/.env` if CWD is `api/`
-
 import express, { Request, Response } from "express";
 import cors from "cors";
-import reportRoutes from "./routes/reportRoutes"; // Import report routes
-import userRoutes from "./routes/userRoutes"; // Import user routes
-// import prisma from './lib/prisma'; // Prisma is used within routes
+import connectToDatabase from "./lib/mongodb";
+import reportRoutes from "./routes/reportRoutes";
+import userRoutes from "./routes/userRoutes";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for base64 images
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Initialize MongoDB connection
+connectToDatabase()
+  .then(() => {
+    console.log('Database connected successfully');
+  })
+  .catch((error) => {
+    console.error('Database connection failed:', error);
+    process.exit(1);
+  });
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`API Request Log: ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // Test route
 app.get("/api", (req: Request, res: Response) => {
-  res.send("Water Report API is running!");
+  res.json({ 
+    message: "Water Report API is running with MongoDB!",
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Mount report routes
-app.use("/api/reports", reportRoutes);
-// Mount user routes
+// Mount routes
 app.use("/api/users", userRoutes);
+app.use("/api/reports", reportRoutes);
 
-// Global error handler (very basic)
+// 404 handler - using a more standard approach
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// Global error handler
 app.use((err: Error, req: Request, res: Response, next: Function) => {
   console.error(err.stack);
-  res.status(500).send("Something broke!");
+  res.status(500).json({ error: "Something broke!" });
 });
 
 app.listen(PORT, () => {

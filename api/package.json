@@ -1,13 +1,13 @@
 {
   "name": "api",
   "version": "1.0.0",
-  "description": "LeakasgeApp API with Express, Prisma, Supabase",
+  "description": "LeakageApp API with Express, MongoDB, JWT Authentication",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "prisma:generate": "prisma generate --schema=../prisma/schema.prisma",
     "build": "tsc",
     "start": "node dist/index.js",
+    "seed": "ts-node src/seed.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,20 +15,24 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.11.0",
-    "@supabase/supabase-js": "^2.50.2",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",
     "express": "^5.1.0",
-    "prisma": "^6.11.0"
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.3.0",
+    "mongoose": "^8.1.0",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/multer": "^1.4.11",
     "@types/node": "^24.0.10",
-    "dotenv-cli": "^8.0.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.6.3"
   }
 }

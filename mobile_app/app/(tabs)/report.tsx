@@ -15,8 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { supabase } from '@/lib/supabase'; // Keep for image uploads for now
-import { useAuth } from '@/hooks/useAuth';
+import { apiClient } from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 // WaterReportInsert might not be fully compatible, define specific payload type
 // import { WaterReportInsert } from '@/types/database';
 import {
@@ -35,10 +35,10 @@ interface ApiReportPayload {
   issue_type: string; // e.g., LEAKAGE
   severity: string; // e.g., HIGH
   description: string;
-  location_address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  image_base64_data?: string[] | null; // Changed from image_urls
+  location_address?: string;
+  latitude?: number;
+  longitude?: number;
+  image_base64_data?: string[]; // Changed from image_urls
   // user_id is added by the backend using the token
 }
 
@@ -243,36 +243,8 @@ export default function Report() {
     // for now, proceeding with the assumption that the backend will expect image_base64_data.
 
     try {
-      // Retrieve session for auth token
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
-
-      if (!token) {
-        Alert.alert(
-          'Error',
-          'Authentication token not found. Please log in again.'
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/reports`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(reportData),
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        // Use error message from API if available, otherwise default
-        throw new Error(
-          responseData.error || `Server responded with ${response.status}`
-        );
-      }
+      // Use apiClient to submit the report
+      await apiClient.createReport(reportData);
 
       Alert.alert('Success', 'Report submitted successfully!', [
         { text: 'OK', onPress: () => router.replace('/(tabs)') },

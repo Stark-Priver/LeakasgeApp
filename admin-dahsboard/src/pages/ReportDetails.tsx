@@ -6,19 +6,13 @@ import {
   Calendar,
   User,
   Camera,
-  Phone,
   Mail,
   Clock,
   AlertTriangle,
   CheckCircle,
   MessageSquare,
 } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Keep for auth session
-// import type { WaterReport } from '../lib/supabase'; // Will use ApiWaterReport
-import { ApiWaterReport } from "./Reports"; // Import the API report type
-
-// API base URL - should ideally come from .env or a config file
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { adminApiClient, WaterReport } from "../lib/apiClient";
 
 // Leaflet Map Component
 const LeafletMap = ({
@@ -110,37 +104,27 @@ const LeafletMap = ({
 
 export function ReportDetails() {
   const { id } = useParams<{ id: string }>();
-  const [report, setReport] = useState<ApiWaterReport | null>(null); // Use ApiWaterReport
+  const [report, setReport] = useState<WaterReport | null>(null); // Use WaterReport from API client
   const [loading, setLoading] = useState(true);
   // const [comment, setComment] = useState(''); // Placeholder for future comment feature - remove if not used
   const [currentAssignedTo, setCurrentAssignedTo] = useState(""); // For assignment input field
   const [currentStatus, setCurrentStatus] = useState<
-    ApiWaterReport["status"] | undefined
+    WaterReport["status"] | undefined
   >(undefined);
 
   useEffect(() => {
-    if (id) {
+    if (id && id !== 'undefined') {
       fetchReportDetails(id);
+    } else {
+      setLoading(false);
+      setReport(null);
     }
   }, [id]);
 
   const fetchReportDetails = async (reportId: string) => {
     setLoading(true);
     try {
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
-      if (!token) throw new Error("Authentication token not found.");
-
-      const response = await fetch(`${API_BASE_URL}/reports/${reportId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to fetch report: ${response.statusText}`
-        );
-      }
-      const data: ApiWaterReport = await response.json();
+      const data = await adminApiClient.getReport(reportId);
       setReport(data);
       setCurrentAssignedTo(data.assigned_to || "");
       setCurrentStatus(data.status);
@@ -156,7 +140,7 @@ export function ReportDetails() {
     if (!report || !id) return;
 
     const payload: {
-      status?: ApiWaterReport["status"];
+      status?: WaterReport["status"];
       assigned_to?: string | null;
     } = {};
 
@@ -176,28 +160,14 @@ export function ReportDetails() {
     setLoading(true); // Indicate loading state for save operation
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
-      if (!token) throw new Error("Authentication token not found.");
-
-      const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
-        // Use PUT /api/reports/:id
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to update report: ${response.statusText}`
-        );
-      }
-
-      const updatedReportFromServer: ApiWaterReport = await response.json();
+      // Convert null to undefined for API compatibility
+      const apiPayload = {
+        ...payload,
+        assigned_to: payload.assigned_to === null ? undefined : payload.assigned_to
+      };
+      
+      const result = await adminApiClient.updateReport(id, apiPayload);
+      const updatedReportFromServer = result.report;
       setReport(updatedReportFromServer); // Update report state with the fresh data from DB
       setCurrentAssignedTo(updatedReportFromServer.assigned_to || "");
       setCurrentStatus(updatedReportFromServer.status);
@@ -212,7 +182,7 @@ export function ReportDetails() {
 
   // Quick status update handler, e.g. for "Mark as Resolved" button
   const handleQuickStatusUpdate = async (
-    newStatus: ApiWaterReport["status"]
+    newStatus: WaterReport["status"]
   ) => {
     if (!report || !id || newStatus === report.status) return;
 
@@ -221,30 +191,12 @@ export function ReportDetails() {
     setLoading(true);
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
-      if (!token) throw new Error("Authentication token not found.");
-
-      const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          assigned_to: report.assigned_to,
-        }), // Send current assigned_to as well
+      const result = await adminApiClient.updateReport(id, {
+        status: newStatus,
+        assigned_to: report.assigned_to,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to update report: ${response.statusText}`
-        );
-      }
-
-      const updatedReportFromServer: ApiWaterReport = await response.json();
+      const updatedReportFromServer = result.report;
       setReport(updatedReportFromServer);
       setCurrentAssignedTo(updatedReportFromServer.assigned_to || "");
       setCurrentStatus(updatedReportFromServer.status);
@@ -269,7 +221,7 @@ export function ReportDetails() {
       .join(" ");
   };
 
-  const getSeverityBadgeStyle = (severity?: ApiWaterReport["severity"]) => {
+  const getSeverityBadgeStyle = (severity?: WaterReport["severity"]) => {
     // API sends uppercase: CRITICAL, HIGH, MEDIUM, LOW
     switch (severity) {
       case "CRITICAL":
@@ -285,7 +237,7 @@ export function ReportDetails() {
     }
   };
 
-  const getStatusBadgeStyle = (status?: ApiWaterReport["status"]) => {
+  const getStatusBadgeStyle = (status?: WaterReport["status"]) => {
     // API sends uppercase: RESOLVED, IN_PROGRESS, PENDING
     switch (status) {
       case "RESOLVED":
@@ -299,7 +251,7 @@ export function ReportDetails() {
     }
   };
 
-  const getStatusIcon = (status?: ApiWaterReport["status"]) => {
+  const getStatusIcon = (status?: WaterReport["status"]) => {
     // API sends uppercase
     switch (status) {
       case "RESOLVED":
@@ -367,7 +319,7 @@ export function ReportDetails() {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Report Details</h1>
             <p className="text-gray-500 text-sm">
-              ID: <span className="font-mono">{report.id}</span>
+              ID: <span className="font-mono">{report._id}</span>
             </p>
           </div>
         </div>
@@ -604,28 +556,28 @@ export function ReportDetails() {
                 <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center border border-blue-200">
                   <span className="text-lg font-medium text-blue-600">
                     {/* User details are now directly from report.user */}
-                    {report.user?.full_name?.charAt(0).toUpperCase() ||
-                      report.user?.email?.charAt(0).toUpperCase() ||
+                    {(typeof report.user_id === 'object' && report.user_id?.full_name?.charAt(0).toUpperCase()) ||
+                      (typeof report.user_id === 'object' && report.user_id?.email?.charAt(0).toUpperCase()) ||
                       "?"}
                   </span>
                 </div>
                 <div>
                   <p className="text-base font-semibold text-gray-800">
-                    {report.user?.full_name ||
-                      formatText(report.user?.email, "Anonymous User")}
+                    {(typeof report.user_id === 'object' && report.user_id?.full_name) ||
+                      formatText(typeof report.user_id === 'object' ? report.user_id?.email : undefined, "Anonymous User")}
                   </p>
                   <p className="text-xs text-gray-500">Reporter</p>
                 </div>
               </div>
-              {report.user?.email && (
+              {(typeof report.user_id === 'object' && report.user_id?.email) && (
                 <div className="flex items-center space-x-2.5 text-sm text-gray-700 pt-1">
                   <Mail className="h-4 w-4 text-gray-500 flex-shrink-0" />
                   <a
-                    href={`mailto:${report.user.email}`}
+                    href={`mailto:${typeof report.user_id === 'object' ? report.user_id.email : ''}`}
                     className="hover:underline truncate"
-                    title={report.user.email}
+                    title={typeof report.user_id === 'object' ? report.user_id.email : ''}
                   >
-                    {report.user.email}
+                    {typeof report.user_id === 'object' ? report.user_id.email : ''}
                   </a>
                 </div>
               )}
@@ -655,7 +607,7 @@ export function ReportDetails() {
                   id="statusSelect"
                   value={currentStatus || ""} // Use currentStatus state
                   onChange={(e) =>
-                    setCurrentStatus(e.target.value as ApiWaterReport["status"])
+                    setCurrentStatus(e.target.value as WaterReport["status"])
                   }
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
                 >
@@ -714,13 +666,15 @@ export function ReportDetails() {
                   Mark as Resolved
                 </button>
               )}
+              {/* Ban User button commented out until handleBanUser function is implemented
               <button
-                onClick={() => handleBanUser(report.user?.id)}
+                onClick={() => handleBanUser(typeof report.user_id === 'object' ? report.user_id._id : '')}
                 disabled={loading}
                 className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-50"
               >
-                Ban User {report.user?.email}
+                Ban User {typeof report.user_id === 'object' ? report.user_id.email : ''}
               </button>
+              */}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Search,
@@ -12,9 +12,7 @@ import {
   RefreshCw,
   FileText,
 } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Keep for auth and potentially geocoding fallback
-import type { WaterReport as SupabaseWaterReport } from "../lib/supabase"; // Keep original type for reference or specific Supabase interactions if any remain
-import { useAuth } from "../contexts/AuthContext"; // To get user session/token easily if exposed, otherwise use supabase.auth.getSession()
+import { adminApiClient, WaterReport, User as UserType } from "../lib/apiClient";
 
 // Define a type for the report structure expected from the new API
 // This should align with what Prisma returns, including the nested user.
@@ -43,11 +41,9 @@ export interface ApiWaterReport {
   // For now, assuming 'location' was derived or an alias.
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; // Should be in .env ideally
-
 export function Reports() {
-  const [reports, setReports] = useState<ApiWaterReport[]>([]);
-  const [filteredReports, setFilteredReports] = useState<ApiWaterReport[]>([]); // Changed type
+  const [reports, setReports] = useState<WaterReport[]>([]);
+  const [filteredReports, setFilteredReports] = useState<WaterReport[]>([]); // Changed type
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -77,38 +73,12 @@ export function Reports() {
   ]);
 
   const fetchReports = async () => {
-    const isRefresh = refreshing || loading; // Consider initial load also a refresh for state setting
     if (!loading && !refreshing) setLoading(true); // Set loading if not already refreshing
     if (!refreshing) setRefreshing(true);
 
     try {
-      const session = await supabase.auth.getSession(); // For auth token
-      const token = session?.data.session?.access_token;
-
-      if (!token) {
-        throw new Error("No authentication token found. Please log in.");
-      }
-
-      // This part is already correct as it fetches from API_BASE_URL/reports
-      // which was updated in a previous step.
-      // The existing fetch logic here should be fine.
-      // The main change was ensuring API_BASE_URL itself is from .env.
-      // We just need to ensure the processing and state updates are robust.
-
-      const response = await fetch(`${API_BASE_URL}/reports`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to fetch reports: ${response.statusText}`
-        );
-      }
-
-      let data: ApiWaterReport[] = await response.json();
+      // Use adminApiClient to fetch reports
+      let data = await adminApiClient.getReports();
 
       // Client-side geocoding can remain if desired
       data = await Promise.all(
@@ -129,10 +99,10 @@ export function Reports() {
         })
       );
 
-      setReports(data);
+      setReports(data || []);
     } catch (error: any) {
-      console.error("Error fetching reports:", error.message || error);
-      // Optionally set an error state here to display to the user
+      console.error("Error fetching reports:", error);
+      // Could add toast notification here instead of setError
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -155,7 +125,7 @@ export function Reports() {
   };
 
   const applyFilters = () => {
-    let filtered: ApiWaterReport[] = [...reports];
+    let filtered: WaterReport[] = [...reports];
 
     // Search filter
     if (searchTerm) {
@@ -166,11 +136,11 @@ export function Reports() {
           (report.location_address || "")
             .toLowerCase()
             .includes(lowerSearchTerm) ||
-          (report.user?.email || "").toLowerCase().includes(lowerSearchTerm) ||
-          (report.user?.full_name || "")
+          ((report.user_id as UserType)?.email || "").toLowerCase().includes(lowerSearchTerm) ||
+          ((report.user_id as UserType)?.full_name || "")
             .toLowerCase()
             .includes(lowerSearchTerm) ||
-          report.id.toLowerCase().includes(lowerSearchTerm)
+          report._id.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
@@ -193,12 +163,12 @@ export function Reports() {
       let aValue: any, bValue: any;
 
       switch (sortBy) {
-        case "createdAt": // Field in ApiWaterReport is 'createdAt'
+        case "createdAt": // Field in WaterReport is 'createdAt'
           aValue = new Date(a.createdAt).getTime();
           bValue = new Date(b.createdAt).getTime();
           break;
-        case "severity": // Severity values in ApiWaterReport are 'LOW', 'MEDIUM', etc.
-          const severityOrder: { [key in ApiWaterReport["severity"]]: number } =
+        case "severity": // Severity values in WaterReport are 'LOW', 'MEDIUM', etc.
+          const severityOrder: { [key in WaterReport["severity"]]: number } =
             {
               LOW: 1,
               MEDIUM: 2,
@@ -209,7 +179,7 @@ export function Reports() {
           bValue = severityOrder[b.severity] || 0;
           break;
         default:
-          // Check if sortBy is a valid key of ApiWaterReport
+          // Check if sortBy is a valid key of WaterReport
           if (sortBy in a && sortBy in b) {
             aValue = (a as any)[sortBy];
             bValue = (b as any)[sortBy];
@@ -239,42 +209,20 @@ export function Reports() {
     newStatus: ApiWaterReport["status"] // Expects 'PENDING', 'IN_PROGRESS', or 'RESOLVED'
   ) => {
     try {
-      const session = await supabase.auth.getSession(); // Still use supabase for auth token
-      const token = session?.data.session?.access_token;
-      if (!token) {
-        throw new Error("Authentication token not found.");
-      }
-
-      // Ensure this points to the general update endpoint, not /status specifically
-      const response = await fetch(`${API_BASE_URL}/reports/${reportId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }), // API expects uppercase status
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error ||
-            `Failed to update report status: ${response.statusText}`
-        );
-      }
-
-      const updatedReportFromServer: ApiWaterReport = await response.json();
+      // Use adminApiClient to update report status
+      const result = await adminApiClient.updateReport(reportId, { status: newStatus });
+      const updatedReportFromServer = result.report;
 
       // Update local state
       setReports(
         reports.map((report) =>
-          report.id === reportId ? updatedReportFromServer : report
+          report._id === reportId ? updatedReportFromServer : report
         )
       );
       // Also update filteredReports to reflect the change immediately if it's displayed
       setFilteredReports(
         filteredReports.map((report) =>
-          report.id === reportId ? updatedReportFromServer : report
+          report._id === reportId ? updatedReportFromServer : report
         )
       );
     } catch (error: any) {
@@ -287,9 +235,9 @@ export function Reports() {
   const exportToCSV = async () => {
     setExporting(true);
     try {
-      // Prepare data for CSV using ApiWaterReport structure
+      // Prepare data for CSV using WaterReport structure
       const csvData = filteredReports.map((report) => ({
-        "Report ID": report.id,
+        "Report ID": report._id,
         "Issue Type": formatText(report.issue_type), // formatText needs to handle uppercase enums
         Description: report.description,
         Location: report.location_address || "N/A", // No 'location' field in ApiWaterReport
@@ -300,7 +248,7 @@ export function Reports() {
         Severity: formatText(report.severity), // formatText needs to handle uppercase enums
         Status: formatText(report.status), // formatText needs to handle uppercase enums
         "Reported By":
-          report.user?.full_name || report.user?.email || "Anonymous",
+          (report.user_id as UserType)?.full_name || (report.user_id as UserType)?.email || "Anonymous",
         "Created Date": new Date(report.createdAt).toLocaleDateString(), // Use createdAt
         "Updated Date": new Date(report.updatedAt).toLocaleDateString(), // Use updatedAt
       }));
@@ -312,7 +260,7 @@ export function Reports() {
         ...csvData.map((row) =>
           headers
             .map((header) => {
-              const value = row[header] || "";
+              const value = (row as any)[header] || "";
               // Escape quotes and wrap in quotes if contains comma, quote, or newline
               return /[",\n]/.test(value)
                 ? `"${value.replace(/"/g, '""')}"`
@@ -388,7 +336,7 @@ export function Reports() {
     }
   };
 
-  const getDisplayLocation = (report: ApiWaterReport) => {
+  const getDisplayLocation = (report: WaterReport) => {
     if (report.location_address) {
       return report.location_address;
     }
@@ -571,7 +519,7 @@ export function Reports() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredReports.map((report) => (
-                <tr key={report.id} className="hover:bg-gray-50">
+                <tr key={report._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
@@ -610,24 +558,24 @@ export function Reports() {
                         <div
                           className="text-sm font-medium text-gray-900"
                           title={
-                            report.user?.full_name ||
-                            report.user?.email ||
+                            (report.user_id as UserType)?.full_name ||
+                            (report.user_id as UserType)?.email ||
                             "Anonymous"
                           }
                         >
-                          {report.user?.full_name ||
-                            report.user?.email ||
+                          {(report.user_id as UserType)?.full_name ||
+                            (report.user_id as UserType)?.email ||
                             "Anonymous"}
-                          {report.user?.is_banned && (
+                          {(report.user_id as UserType)?.is_banned && (
                             <span className="text-red-500 ml-1">(Banned)</span>
                           )}
                         </div>
-                        {report.user?.full_name && report.user?.email && (
+                        {(report.user_id as UserType)?.full_name && (report.user_id as UserType)?.email && (
                           <div
                             className="text-xs text-gray-500"
-                            title={report.user.email}
+                            title={(report.user_id as UserType).email}
                           >
-                            {report.user.email}
+                            {(report.user_id as UserType).email}
                           </div>
                         )}
                       </div>
@@ -638,7 +586,7 @@ export function Reports() {
                       value={report.status} // This will be 'PENDING', 'IN_PROGRESS', etc.
                       onChange={(e) =>
                         updateReportStatus(
-                          report.id,
+                          report._id,
                           e.target.value as ApiWaterReport["status"]
                         )
                       }
@@ -659,7 +607,7 @@ export function Reports() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link
-                      to={`/reports/${report.id}`}
+                      to={`/reports/${report._id}`}
                       className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
                     >
                       <Eye className="h-4 w-4 mr-1" />

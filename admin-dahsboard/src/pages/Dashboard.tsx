@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FileText,
-  Users,
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -22,8 +21,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { ApiWaterReport } from "./Reports"; // Use the API report type
-import { supabase } from "../lib/supabase"; // Still needed for auth session
+import { WaterReport } from "../lib/apiClient";
+import { adminApiClient } from "../lib/apiClient";
+import { useAuth } from "../contexts/AuthContext";
 
 interface DashboardStats {
   totalReports: number;
@@ -35,6 +35,7 @@ interface DashboardStats {
 }
 
 export function Dashboard() {
+  const { isAuthenticated } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalReports: 0,
     pendingReports: 0,
@@ -43,49 +44,23 @@ export function Dashboard() {
     totalUsers: 0,
     criticalIssues: 0,
   });
-  const [recentReports, setRecentReports] = useState<ApiWaterReport[]>([]);
+  const [recentReports, setRecentReports] = useState<WaterReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (isAuthenticated) {
+      fetchDashboardData();
+    }
+  }, [isAuthenticated]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const session = await supabase.auth.getSession();
-      const token = session?.data.session?.access_token;
+      // Fetch reports using the API client
+      const reportsData = await adminApiClient.getReports();
 
-      if (!token) {
-        throw new Error("Authentication token not found.");
-      }
-
-      // Fetch all reports
-      const reportsResponse = await fetch(`${API_BASE_URL}/reports`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!reportsResponse.ok) {
-        const errorData = await reportsResponse.json();
-        throw new Error(
-          errorData.error ||
-            `Failed to fetch reports: ${reportsResponse.statusText}`
-        );
-      }
-      const reportsData: ApiWaterReport[] = await reportsResponse.json();
-
-      // Fetch user count
-      const usersCountResponse = await fetch(`${API_BASE_URL}/users/count`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!usersCountResponse.ok) {
-        const errorData = await usersCountResponse.json();
-        throw new Error(
-          errorData.error ||
-            `Failed to fetch user count: ${usersCountResponse.statusText}`
-        );
-      }
-      const usersCountData: { count: number } = await usersCountResponse.json();
+      // Fetch user count using the API client
+      const usersCountResult = await adminApiClient.getUserCount();
 
       setStats({
         totalReports: reportsData.length,
@@ -95,7 +70,7 @@ export function Dashboard() {
           .length,
         resolvedReports: reportsData.filter((r) => r.status === "RESOLVED")
           .length,
-        totalUsers: usersCountData.count || 0,
+        totalUsers: usersCountResult.count || 0,
         criticalIssues: reportsData.filter((r) => r.severity === "CRITICAL")
           .length,
       });
@@ -161,7 +136,7 @@ export function Dashboard() {
       .join(" ");
   };
 
-  const getSeverityColor = (severity?: ApiWaterReport["severity"]) => {
+  const getSeverityColor = (severity?: WaterReport["severity"]) => {
     switch (severity) {
       case "CRITICAL":
         return "bg-red-100 text-red-800";
@@ -176,7 +151,7 @@ export function Dashboard() {
     }
   };
 
-  const getStatusColor = (status?: ApiWaterReport["status"]) => {
+  const getStatusColor = (status?: WaterReport["status"]) => {
     switch (status) {
       case "RESOLVED":
         return "bg-green-100 text-green-800";
@@ -338,7 +313,7 @@ export function Dashboard() {
           )}
           {recentReports.map((report) => (
             <div
-              key={report.id}
+              key={report._id}
               className="p-5 md:p-6 hover:bg-gray-50 transition-colors duration-150"
             >
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -379,8 +354,8 @@ export function Dashboard() {
                       )}
                       <p className="text-xs text-gray-400 mt-1.5">
                         By:{" "}
-                        {report.user?.full_name ||
-                          report.user?.email ||
+                        {(typeof report.user_id === 'object' && report.user_id?.full_name) ||
+                          (typeof report.user_id === 'object' && report.user_id?.email) ||
                           "Anonymous"}{" "}
                         • Submitted:{" "}
                         {new Date(report.createdAt).toLocaleDateString(
